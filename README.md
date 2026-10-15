@@ -64,6 +64,7 @@ Están descritas en `.env.example`, con el origen de cada una.
 | `npm run emulators` | Emuladores de Firebase Auth (9099) y Firestore (8080) |
 | `npm run demo` | Emuladores + cuentas de demostración + servidor de desarrollo, en un solo comando |
 | `npm run seed:demo` | Crea las cuentas de demostración (los emuladores deben estar encendidos) |
+| `npm run seed:cursos -- <correo>` | Crea cursos de prueba en los emuladores para esa cuenta |
 
 ## Cómo funciona la sesión
 
@@ -84,6 +85,23 @@ Todo ocurre en el servidor; el navegador nunca habla directamente con Firebase.
 const { uid } = await requireSession();
 const courses = await adminDb().collection(`users/${uid}/courses`).get();
 ```
+
+## Cursos (HU07)
+
+Cada curso es un documento en `users/{uid}/courses/{courseId}` con sus unidades y sesiones dentro (la forma está en `src/lib/courses/schema.ts`). La HU06 lo escribe y la HU07 lo lee:
+
+```ts
+{
+  name: "Nombre del curso",
+  units: [
+    { number: 1, title: "Unidad 1", sessions: [{ number: 1, title: "Sesión 1" }] },
+  ],
+}
+```
+
+- `/cursos` lista los cursos del estudiante (`listCourses(uid)`) y `/cursos/{courseId}` muestra uno (`getCourse(uid, courseId)`). Ambas funciones están en `src/lib/courses/queries.ts` y solo buscan dentro de `users/{uid}`; por eso el curso de otro estudiante muestra «No tienes acceso a este curso».
+- El botón «Subir sílabo» lleva a la ruta de la HU05, definida en `UPLOAD_SYLLABUS_PATH` (`src/app/(private)/cursos/utils.ts`).
+- Para probar en local sin la HU06: con los emuladores corriendo y la cuenta ya creada, `npm run seed:cursos -- correo@mail.isil.pe` crea dos cursos de prueba. El script siempre apunta a los emuladores.
 
 ## Riesgos conocidos (Sprint 1)
 
