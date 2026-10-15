@@ -84,6 +84,7 @@ Anota aquí, en una línea cada una, las decisiones que José confirme (por ejem
 - (15/10/2026) Cerrar sesión borra la cookie y llama a `revokeRefreshTokens(uid)`: la cookie deja de servir aunque alguien la haya copiado (cierra la sesión en todos los dispositivos).
 - (15/10/2026) Riesgos aceptados para el Sprint 1: el mensaje «Este correo ya está registrado» (criterio de HU02) revela que un correo existe; `createUser` del Admin SDK no tiene la protección contra abuso del registro de Firebase; sin verificación de correo (HU04, Sprint 3) se puede registrar un correo de ISIL ajeno.
 - (15/10/2026) Guía de estilos: tema oscuro por defecto (`class="dark"` en `<html>`), paleta de la Tabla 8 del informe en `globals.css`, Archivo Black para títulos (`font-heading`) y Geist para el resto. En la Tabla 8 del PDF las filas están desalineadas; se interpretó destructive = #FF6467 y gradiente de marca = #1E3A8A → #38BDF8.
+- (15/10/2026) Por ahora el desarrollo corre en local con los emuladores de Firebase (proyecto ficticio demo-recall-isil, Java 21); el proyecto real de Firebase y el despliegue se configuran después. El repositorio en GitHub es joseemorevalle-arli/Proyecto_Tech-Recall_Isil.
 
 ## Reglas académicas (importantes)
 
