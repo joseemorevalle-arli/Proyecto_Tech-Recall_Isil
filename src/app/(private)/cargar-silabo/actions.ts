@@ -135,11 +135,14 @@ export async function generarEstructuraCurso(
       mensaje: "¡Curso creado y estructurado con éxito!",
       cursoId: docRef.id,
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error al generar el curso:", error);
     return {
       exito: false,
-      mensaje: error?.message || "Ocurrió un fallo en el servicio de IA durante la generación del curso.",
+      mensaje:
+        error instanceof Error
+          ? error.message
+          : "Ocurrió un fallo en el servicio de IA durante la generación del curso.",
     };
   }
 }
