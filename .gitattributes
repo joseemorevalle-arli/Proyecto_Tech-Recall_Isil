@@ -1,0 +1,5 @@
+# Fin de línea LF en el repositorio para todo el equipo (Windows y macOS)
+* text=auto eol=lf
+*.ico binary
+*.png binary
+*.pdf binary
