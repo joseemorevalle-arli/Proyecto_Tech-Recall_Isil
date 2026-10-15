@@ -1,7 +1,10 @@
 "use server";
 
 import { initializeApp, getApps } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { FieldValue, getFirestore } from "firebase-admin/firestore";
+import { requireSession } from "@/lib/auth/session";
+import { courseSchema } from "@/lib/courses/schema";
+import { adminDb } from "@/lib/firebase/admin";
 
 process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8080";
 
@@ -94,12 +97,16 @@ export async function procesarYGuardarSilabo(formData: FormData): Promise<Result
   }
 }
 
-// HU06: Generación de la estructura del curso a partir del sílabo
+// HU06: Generación de la estructura del curso a partir del sílabo.
+// El curso se guarda en users/{uid}/courses con la forma que lee la HU07 (src/lib/courses/schema.ts).
 export async function generarEstructuraCurso(
   nombreArchivo: string,
   temas: SilaboTema[],
   simularFallo: boolean = false
 ): Promise<ResultadoGeneracionCurso> {
+  // Fuera del try/catch: sin sesión, requireSession() redirige a iniciar sesión
+  const { uid } = await requireSession();
+
   try {
     // Simulación de fallo para probar el Criterio 3 (Error de generación)
     if (simularFallo) {
@@ -109,26 +116,36 @@ export async function generarEstructuraCurso(
     // Simular un pequeño retardo de procesamiento de la IA
     await new Promise((resolve) => setTimeout(resolve, 1500));
 
-    // Formatear las unidades y sesiones para el curso
-    const unidades = temas.map((t) => ({
-      unidad: `Unidad ${t.semana}`,
-      semana: t.semana,
-      titulo: t.titulo,
-      descripcion: t.descripcion,
-      completado: false,
-    }));
-
     // Nombre sugerido a partir del archivo
     const nombreCurso = nombreArchivo.replace(/\.[^/.]+$/, "").toUpperCase();
 
-    // Guardar el curso estructurado en Firestore (Colección "cursos")
-    const docRef = await db.collection("cursos").add({
-      nombreCurso,
-      archivoOrigen: nombreArchivo,
-      fechaCreacion: new Date().toISOString(),
-      estado: "ACTIVO",
-      unidades,
+    // Cada semana del sílabo es una unidad con su sesión. Se valida con el esquema de la HU07
+    // porque los temas llegan desde el navegador y un curso mal formado no se podría mostrar.
+    const curso = courseSchema.safeParse({
+      name: nombreCurso,
+      units: temas.map((t) => ({
+        number: t.semana,
+        title: t.titulo,
+        sessions: [{ number: t.semana, title: t.descripcion || t.titulo }],
+      })),
     });
+    if (!curso.success) {
+      return {
+        exito: false,
+        mensaje: "La estructura generada del curso no es válida. Vuelve a intentarlo.",
+      };
+    }
+
+    // Guardar el curso en la cuenta del estudiante: users/{uid}/courses
+    const docRef = await adminDb()
+      .collection("users")
+      .doc(uid)
+      .collection("courses")
+      .add({
+        ...curso.data,
+        sourceFile: nombreArchivo,
+        createdAt: FieldValue.serverTimestamp(),
+      });
 
     return {
       exito: true,
