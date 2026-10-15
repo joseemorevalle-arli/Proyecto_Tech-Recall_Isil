@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "emulators": "firebase emulators:start --only auth,firestore --project demo-recall-isil"
+    "emulators": "firebase emulators:start --only auth,firestore --project demo-recall-isil",
+    "seed:cursos": "node scripts/seed-courses.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
