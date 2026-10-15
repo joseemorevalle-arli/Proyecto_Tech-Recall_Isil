@@ -9,7 +9,7 @@ El estudiante sube el sílabo oficial en PDF, el sistema genera su curso con uni
 - Next.js 15.5 (App Router, Server Actions), React 19 y TypeScript 5
 - Tailwind CSS 4 y shadcn/ui
 - Firebase Authentication y Cloud Firestore (`firebase-admin` en el servidor)
-- Despliegue en Vercel: `experimental` = staging (preview), `main` = producción
+- Despliegue: pendiente. En el Sprint 1 la aplicación se ejecuta en local con los emuladores de Firebase
 
 > Se usa Next.js 15.5 y no 15.3 porque la rama 15.3 ya no recibe parches de seguridad (su último parche, 15.3.9, tiene vulnerabilidades críticas conocidas).
 
@@ -18,24 +18,28 @@ El estudiante sube el sílabo oficial en PDF, el sistema genera su curso con uni
 - Node.js 22 o superior y npm
 - Java 21 o superior, solo para el emulador de Firestore (en Windows: `winget install Microsoft.OpenJDK.21`)
 
-## Cómo levantar el proyecto en local (con emuladores)
+## Demostración local (Sprint 1)
 
-No necesitas un proyecto de Firebase: los emuladores simulan Authentication y Firestore en tu computadora.
+En el Sprint 1 la aplicación se presenta en local, sin servicios en la nube: los **emuladores de Firebase** hacen de Authentication y de base de datos (Firestore) dentro de tu computadora. Para no depender de registrar cuentas en vivo, hay **cuentas de demostración**: correos institucionales con una contraseña genérica.
 
-1. Instala las dependencias: `npm install`
-2. Crea `.env.local` en la raíz con este contenido (no tiene secretos):
+1. Trae lo último de `main` e instala: `git pull` y `npm install`.
+2. Copia `.env.example` como `.env.local` (en Windows: `copy .env.example .env.local`) y completa:
 
    ```
-   FIREBASE_PROJECT_ID=demo-recall-isil
-   FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099
-   FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
    ALLOWED_EMAIL_DOMAINS=mail.isil.pe
+   DEMO_ACCOUNTS=nombre.apellido@mail.isil.pe,otro.alumno@mail.isil.pe
+   DEMO_PASSWORD=una contraseña de al menos 8 caracteres
    ```
 
-3. En una terminal: `npm run emulators` (la interfaz de los emuladores queda en http://127.0.0.1:4000).
-4. En otra terminal: `npm run dev` y abre http://localhost:3000.
+3. Ejecuta `npm run demo`. Enciende los emuladores, crea las cuentas de demostración y levanta la aplicación. La primera vez descarga los emuladores (necesita internet).
+4. Abre http://localhost:3000 e inicia sesión con un correo de `DEMO_ACCOUNTS` y la contraseña `DEMO_PASSWORD`. También puedes crear una cuenta nueva en «Crear cuenta».
+5. Las cuentas y sus documentos se ven en la interfaz de los emuladores: http://127.0.0.1:4000 (Authentication y Firestore).
 
-Los datos de los emuladores se borran al detenerlos.
+Para detener todo, pulsa `Ctrl + C`. Los datos se borran al detenerlo y las cuentas de demostración se vuelven a crear en el siguiente `npm run demo`.
+
+La contraseña genérica es solo para esta demostración: `scripts/seed-demo.mjs` se niega a crear cuentas si no detecta los emuladores. Cuando se conecte el proyecto real de Firebase, cada estudiante entrará con su propia cuenta.
+
+**Alternativa en dos terminales:** `npm run emulators` en una y `npm run dev` en otra. En ese caso, `.env.local` necesita también `FIREBASE_PROJECT_ID=demo-recall-isil`, `FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099` y `FIRESTORE_EMULATOR_HOST=127.0.0.1:8080`, y las cuentas de demostración se crean con `npm run seed:demo`.
 
 ## Variables de entorno
 
@@ -46,7 +50,8 @@ Están descritas en `.env.example`, con el origen de cada una.
 | `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` | Cuenta de servicio del Admin SDK (servidor) |
 | `FIREBASE_API_KEY` | Clave web para el REST de inicio de sesión. Solo servidor, sin `NEXT_PUBLIC_` |
 | `ALLOWED_EMAIL_DOMAINS` | Dominios de correo permitidos para registrarse, separados por comas |
-| `FIREBASE_AUTH_EMULATOR_HOST`, `FIRESTORE_EMULATOR_HOST` | Solo en local, para usar los emuladores |
+| `FIREBASE_AUTH_EMULATOR_HOST`, `FIRESTORE_EMULATOR_HOST` | Solo en local, para usar los emuladores (`npm run demo` las pone solo) |
+| `DEMO_ACCOUNTS`, `DEMO_PASSWORD` | Solo para la demostración local: correos institucionales y su contraseña genérica |
 
 ## Scripts
 
@@ -57,6 +62,9 @@ Están descritas en `.env.example`, con el origen de cada una.
 | `npm run start` | Sirve la compilación de producción |
 | `npm run lint` | ESLint |
 | `npm run emulators` | Emuladores de Firebase Auth (9099) y Firestore (8080) |
+| `npm run demo` | Emuladores + cuentas de demostración + servidor de desarrollo, en un solo comando |
+| `npm run seed:demo` | Crea las cuentas de demostración (los emuladores deben estar encendidos) |
+| `npm run seed:cursos -- <correo>` | Crea cursos de prueba en los emuladores para esa cuenta |
 
 ## Cómo funciona la sesión
 
@@ -77,6 +85,23 @@ Todo ocurre en el servidor; el navegador nunca habla directamente con Firebase.
 const { uid } = await requireSession();
 const courses = await adminDb().collection(`users/${uid}/courses`).get();
 ```
+
+## Cursos (HU07)
+
+Cada curso es un documento en `users/{uid}/courses/{courseId}` con sus unidades y sesiones dentro (la forma está en `src/lib/courses/schema.ts`). La HU06 lo escribe y la HU07 lo lee:
+
+```ts
+{
+  name: "Nombre del curso",
+  units: [
+    { number: 1, title: "Unidad 1", sessions: [{ number: 1, title: "Sesión 1" }] },
+  ],
+}
+```
+
+- `/cursos` lista los cursos del estudiante (`listCourses(uid)`) y `/cursos/{courseId}` muestra uno (`getCourse(uid, courseId)`). Ambas funciones están en `src/lib/courses/queries.ts` y solo buscan dentro de `users/{uid}`; por eso el curso de otro estudiante muestra «No tienes acceso a este curso».
+- El botón «Subir sílabo» lleva a la ruta de la HU05, definida en `UPLOAD_SYLLABUS_PATH` (`src/app/(private)/cursos/utils.ts`).
+- Para probar en local sin la HU06: con los emuladores corriendo y la cuenta ya creada, `npm run seed:cursos -- correo@mail.isil.pe` crea dos cursos de prueba. El script siempre apunta a los emuladores.
 
 ## Riesgos conocidos (Sprint 1)
 
