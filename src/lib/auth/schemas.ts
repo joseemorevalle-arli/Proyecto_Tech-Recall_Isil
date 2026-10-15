@@ -5,6 +5,7 @@ import { isAllowedEmailDomain } from "./email-domain";
 export const MESSAGES = {
   institutionalEmail: "Usa tu correo institucional de ISIL",
   emailAlreadyExists: "Este correo ya está registrado",
+  invalidCredentials: "Correo o contraseña incorrectos",
 } as const;
 
 export const PASSWORD_MIN_LENGTH = 8;
@@ -40,6 +41,14 @@ export function buildRegisterSchema(domains: string[]) {
 }
 
 export type RegisterInput = z.infer<ReturnType<typeof buildRegisterSchema>>;
+
+// Inicio de sesión: no se valida el dominio para no dar pistas sobre qué correos existen
+export const loginSchema = z.object({
+  email: emailField,
+  password: z.string().min(1, "Ingresa tu contraseña"),
+});
+
+export type LoginInput = z.infer<typeof loginSchema>;
 
 // Errores por campo, en el formato que muestra el formulario
 export type FieldErrors<T> = Partial<Record<keyof T, string>>;

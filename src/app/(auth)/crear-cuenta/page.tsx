@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -9,6 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getAllowedEmailDomains } from "@/lib/auth/allowed-domains";
+import { getSession } from "@/lib/auth/session";
 import { RegisterForm } from "./register-form";
 
 export const metadata: Metadata = { title: "Crear cuenta · Recall ISIL" };
@@ -16,7 +18,10 @@ export const metadata: Metadata = { title: "Crear cuenta · Recall ISIL" };
 // Se renderiza en cada petición para leer ALLOWED_EMAIL_DOMAINS del entorno actual
 export const dynamic = "force-dynamic";
 
-export default function CrearCuentaPage() {
+export default async function CrearCuentaPage() {
+  // Con una sesión válida (verificada, no solo la cookie) se va directo a sus cursos
+  if (await getSession()) redirect("/cursos");
+
   const domains = getAllowedEmailDomains();
 
   return (
