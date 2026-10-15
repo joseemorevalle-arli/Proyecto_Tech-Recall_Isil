@@ -54,3 +54,6 @@ ui-debug.log
 /test-results/
 /playwright-report/
 /playwright/.cache/
+
+# configuración local de Claude Code
+.claude/
