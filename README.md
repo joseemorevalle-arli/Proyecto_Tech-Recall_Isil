@@ -61,6 +61,7 @@ Están descritas en `.env.example`, con el origen de cada una.
 | `npm run build` | Compilación de producción |
 | `npm run start` | Sirve la compilación de producción |
 | `npm run lint` | ESLint |
+| `npm test` | Pruebas automáticas (por ahora, el validador de sílabos) |
 | `npm run emulators` | Emuladores de Firebase Auth (9099) y Firestore (8080) |
 | `npm run demo` | Emuladores + cuentas de demostración + servidor de desarrollo, en un solo comando |
 | `npm run seed:demo` | Crea las cuentas de demostración (los emuladores deben estar encendidos) |
@@ -102,6 +103,23 @@ Cada curso es un documento en `users/{uid}/courses/{courseId}` con sus unidades 
 - `/cursos` lista los cursos del estudiante (`listCourses(uid)`) y `/cursos/{courseId}` muestra uno (`getCourse(uid, courseId)`). Ambas funciones están en `src/lib/courses/queries.ts` y solo buscan dentro de `users/{uid}`; por eso el curso de otro estudiante muestra «No tienes acceso a este curso».
 - El botón «Subir sílabo» lleva a la ruta de la HU05, definida en `UPLOAD_SYLLABUS_PATH` (`src/app/(private)/cursos/utils.ts`).
 - Para probar en local sin la HU06: con los emuladores corriendo y la cuenta ya creada, `npm run seed:cursos -- correo@mail.isil.pe` crea dos cursos de prueba. El script siempre apunta a los emuladores.
+
+## Clases (HU08)
+
+Cada clase es un documento en `users/{uid}/courses/{courseId}/classes/{classId}`:
+
+```ts
+{
+  name: "Sesión 3: Modelo entidad-relación",
+  zoomUrl: "https://isil-pe.zoom.us/rec/play/...",
+  createdAt: Timestamp, // la pone el servidor (FieldValue.serverTimestamp())
+}
+```
+
+- En el detalle del curso, el botón «Registrar clase» abre `/cursos/{courseId}/clases/nueva`. El formulario valida el enlace mientras el estudiante escribe y solo habilita el envío cuando hay un nombre y un enlace válido.
+- La regla del enlace está en un solo lugar, `classSchema` (`src/lib/classes/schema.ts`): acepta `https://isil-pe.zoom.us/rec/play/` seguido del código de la grabación y, si los hay, parámetros (`?...`). La usan el formulario y la Server Action, que vuelve a validar antes de guardar.
+- La Server Action (`src/app/(private)/cursos/[courseId]/clases/nueva/actions.ts`) llama a `requireSession()`, comprueba con `getCourse(uid, courseId)` que el curso sea del estudiante (si no, responde «No tienes acceso a este curso»), guarda la clase y vuelve al curso con el aviso «Clase registrada».
+- `listClasses(uid, courseId)` (`src/lib/classes/queries.ts`) devuelve las clases de la más reciente a la más antigua; el detalle del curso las muestra en «Clases registradas».
 
 ## Riesgos conocidos (Sprint 1)
 
