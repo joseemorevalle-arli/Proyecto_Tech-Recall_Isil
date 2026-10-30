@@ -105,6 +105,12 @@ Cada curso es un documento en `users/{uid}/courses/{courseId}` con sus unidades 
 - El botón «Subir sílabo» lleva a la ruta de la HU05, definida en `UPLOAD_SYLLABUS_PATH` (`src/app/(private)/cursos/utils.ts`).
 - Para probar en local sin la HU06: con los emuladores corriendo y la cuenta ya creada, `npm run seed:cursos -- correo@mail.isil.pe` crea dos cursos de prueba. El script siempre apunta a los emuladores.
 
+### Editar y eliminar un curso
+
+- En el detalle del curso, «Editar curso» abre `/cursos/{courseId}/editar`: se cambia el nombre y se agregan, quitan, reordenan o renombran unidades y sesiones. El formulario solo manda títulos y su orden; el servidor valida y **recalcula la numeración** (las unidades 1, 2, 3… y las sesiones de corrido en todo el curso), así que quitar o mover algo nunca deja huecos. La regla de validación está en `src/lib/courses/edit.ts`, con sus pruebas (`npm test`).
+- «Eliminar curso» pide confirmación y borra el curso **junto con todas sus clases** (`recursiveDelete`, porque Firestore no borra las subcolecciones solo). No se puede deshacer.
+- Las dos acciones llaman a `requireSession()` y comprueban con `getCourse(uid, courseId)` que el curso sea del estudiante; con un curso ajeno responden «No tienes acceso a este curso».
+
 ## Clases (HU08)
 
 Cada clase es un documento en `users/{uid}/courses/{courseId}/classes/{classId}`:
@@ -121,6 +127,11 @@ Cada clase es un documento en `users/{uid}/courses/{courseId}/classes/{classId}`
 - La regla del enlace está en un solo lugar, `classSchema` (`src/lib/classes/schema.ts`): acepta `https://isil-pe.zoom.us/rec/play/` seguido del código de la grabación y, si los hay, parámetros (`?...`). La usan el formulario y la Server Action, que vuelve a validar antes de guardar.
 - La Server Action (`src/app/(private)/cursos/[courseId]/clases/nueva/actions.ts`) llama a `requireSession()`, comprueba con `getCourse(uid, courseId)` que el curso sea del estudiante (si no, responde «No tienes acceso a este curso»), guarda la clase y vuelve al curso con el aviso «Clase registrada».
 - `listClasses(uid, courseId)` (`src/lib/classes/queries.ts`) devuelve las clases de la más reciente a la más antigua; el detalle del curso las muestra en «Clases registradas».
+
+### Editar y eliminar una clase
+
+- En la lista de clases, el lápiz abre `/cursos/{courseId}/clases/{classId}/editar` (el mismo formulario del registro, con los datos actuales y las mismas reglas del enlace y del nombre) y el tacho pide confirmación antes de eliminarla.
+- Las acciones (`src/app/(private)/cursos/[courseId]/clases/[classId]/actions.ts`) exigen sesión, comprueban que el curso sea del estudiante y que la clase pertenezca a ese curso (`getClass`). Con un curso ajeno responden «No tienes acceso a este curso»; con una clase que no está en el curso, «No encontramos esa clase…».
 
 ## Riesgos conocidos (Sprint 1)
 
