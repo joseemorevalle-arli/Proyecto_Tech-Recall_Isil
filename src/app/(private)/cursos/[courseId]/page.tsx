@@ -15,6 +15,7 @@ import { getCourse } from "@/lib/courses/queries";
 import { countSessions, type CourseUnit } from "@/lib/courses/schema";
 import { formatDateTime, plural } from "../utils";
 import { BackToCourses, CourseNoAccess } from "./course-no-access";
+import { DeleteCourseButton } from "./delete-course-button";
 
 export const metadata: Metadata = { title: "Curso · Recall ISIL" };
 
@@ -63,6 +64,11 @@ export default async function CursoPage({
           </Link>
           {/* Sin clases, el botón aparece en el estado vacío */}
           {classes.length > 0 && <RegisterClassLink courseId={course.id} />}
+          <DeleteCourseButton
+            courseId={course.id}
+            courseName={course.name}
+            classCount={classes.length}
+          />
         </div>
       </div>
 
