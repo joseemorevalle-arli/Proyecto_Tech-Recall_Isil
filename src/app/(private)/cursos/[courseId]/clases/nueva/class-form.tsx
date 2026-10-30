@@ -15,14 +15,30 @@ import { registerClassAction, type RegisterClassState } from "./actions";
 
 const initialState: RegisterClassState = {};
 
-export function ClassForm({ courseId }: { courseId: string }) {
-  const [state, formAction, pending] = useActionState(
-    registerClassAction,
-    initialState,
-  );
+type ClassFormProps = {
+  courseId: string;
+  // Por defecto registra una clase nueva (HU08). Para editar, la pantalla pasa su propia acción y datos.
+  action?: (prev: RegisterClassState, formData: FormData) => Promise<RegisterClassState>;
+  classId?: string;
+  initialName?: string;
+  initialZoomUrl?: string;
+  submitLabel?: string;
+  pendingLabel?: string;
+};
+
+export function ClassForm({
+  courseId,
+  action = registerClassAction,
+  classId,
+  initialName = "",
+  initialZoomUrl = "",
+  submitLabel = "Registrar clase",
+  pendingLabel = "Registrando clase…",
+}: ClassFormProps) {
+  const [state, formAction, pending] = useActionState(action, initialState);
   // Campos controlados: se validan con cada tecla y no se borran si el servidor responde con un error
-  const [name, setName] = useState("");
-  const [zoomUrl, setZoomUrl] = useState("");
+  const [name, setName] = useState(initialName);
+  const [zoomUrl, setZoomUrl] = useState(initialZoomUrl);
 
   // Mismo esquema que usa el servidor, aplicado campo por campo mientras el estudiante escribe
   const nameIsValid = classSchema.shape.name.safeParse(name).success;
@@ -34,6 +50,7 @@ export function ClassForm({ courseId }: { courseId: string }) {
   return (
     <form action={formAction} noValidate className="flex flex-col gap-4">
       <input type="hidden" name="courseId" value={courseId} />
+      {classId && <input type="hidden" name="classId" value={classId} />}
 
       {state.formError && (
         <Alert variant="destructive">
@@ -115,7 +132,7 @@ export function ClassForm({ courseId }: { courseId: string }) {
           disabled={!canSubmit || pending}
           aria-describedby={canSubmit ? undefined : "submit-hint"}
         >
-          {pending ? "Registrando clase…" : "Registrar clase"}
+          {pending ? pendingLabel : submitLabel}
         </Button>
         {!canSubmit && (
           <p

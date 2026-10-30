@@ -24,6 +24,25 @@ export function classesCollection(uid: string, courseId: string) {
     .collection("classes");
 }
 
+// IDs de documento válidos (los de Firestore son 20 letras y números). Evita enlaces con "/" o "..".
+const CLASS_ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/;
+
+// Una clase del curso, o null si no existe. Igual que getCourse: antes hay que haber confirmado
+// con getCourse(uid, courseId) que el curso es del estudiante.
+export async function getClass(
+  uid: string,
+  courseId: string,
+  classId: string,
+): Promise<CourseClass | null> {
+  if (!CLASS_ID_PATTERN.test(classId)) return null;
+
+  const doc = await classesCollection(uid, courseId).doc(classId).get();
+  if (!doc.exists) return null;
+
+  const parsed = storedClassSchema.safeParse(doc.data());
+  return parsed.success ? { id: doc.id, ...parsed.data } : null;
+}
+
 // Clases del curso, de la más reciente a la más antigua. Un documento con formato inválido se omite (y se registra).
 export async function listClasses(
   uid: string,

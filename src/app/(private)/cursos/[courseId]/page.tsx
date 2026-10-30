@@ -15,6 +15,7 @@ import { getCourse } from "@/lib/courses/queries";
 import { countSessions, type CourseUnit } from "@/lib/courses/schema";
 import { formatDateTime, plural } from "../utils";
 import { BackToCourses, CourseNoAccess } from "./course-no-access";
+import { DeleteClassButton } from "./clases/[classId]/delete-class-button";
 import { DeleteCourseButton } from "./delete-course-button";
 
 export const metadata: Metadata = { title: "Curso · Recall ISIL" };
@@ -22,8 +23,13 @@ export const metadata: Metadata = { title: "Curso · Recall ISIL" };
 type CursoPageProps = {
   params: Promise<{ courseId: string }>;
   // ?registrada={classId}: la clase que se acaba de registrar (HU08)
-  // ?editado=1: el curso se acaba de editar (CRUD de cursos)
-  searchParams: Promise<{ registrada?: string | string[]; editado?: string | string[] }>;
+  // ?editado=1: el curso se acaba de editar. ?clase-editada={id} y ?clase-eliminada=1: CRUD de clases
+  searchParams: Promise<{
+    registrada?: string | string[];
+    editado?: string | string[];
+    "clase-editada"?: string | string[];
+    "clase-eliminada"?: string | string[];
+  }>;
 };
 
 // HU07: detalle de un curso con sus unidades y sesiones. HU08: sus clases registradas.
@@ -33,7 +39,8 @@ export default async function CursoPage({
   searchParams,
 }: CursoPageProps) {
   const { courseId } = await params;
-  const { registrada, editado } = await searchParams;
+  const { registrada, editado, "clase-eliminada": claseEliminada } = await searchParams;
+  const claseEditada = (await searchParams)["clase-editada"];
   const { uid } = await requireSession();
   const course = await getCourse(uid, courseId);
 
@@ -72,6 +79,22 @@ export default async function CursoPage({
         </div>
       </div>
 
+      {claseEliminada === "1" && (
+        <Alert className="text-green-400">
+          <CircleCheck aria-hidden />
+          <AlertTitle>Clase eliminada</AlertTitle>
+          <AlertDescription>La clase se borró del curso.</AlertDescription>
+        </Alert>
+      )}
+
+      {typeof claseEditada === "string" && classes.some((item) => item.id === claseEditada) && (
+        <Alert className="text-green-400">
+          <CircleCheck aria-hidden />
+          <AlertTitle>Clase actualizada</AlertTitle>
+          <AlertDescription>Los cambios de la clase se guardaron.</AlertDescription>
+        </Alert>
+      )}
+
       {editado === "1" && (
         <Alert className="text-green-400">
           <CircleCheck aria-hidden />
@@ -95,7 +118,7 @@ export default async function CursoPage({
         {classes.length === 0 ? (
           <EmptyClasses courseId={course.id} />
         ) : (
-          <ClassList classes={classes} />
+          <ClassList classes={classes} courseId={course.id} />
         )}
       </div>
 
@@ -133,7 +156,7 @@ function RegisterClassLink({ courseId }: { courseId: string }) {
 }
 
 // Clases del curso, de la más reciente a la más antigua
-function ClassList({ classes }: { classes: CourseClass[] }) {
+function ClassList({ classes, courseId }: { classes: CourseClass[]; courseId: string }) {
   return (
     <Card>
       <CardContent>
@@ -147,7 +170,7 @@ function ClassList({ classes }: { classes: CourseClass[] }) {
                 className="mt-0.5 size-4 shrink-0 text-muted-foreground"
                 aria-hidden
               />
-              <div className="flex min-w-0 flex-col gap-0.5">
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="font-medium break-words">{item.name}</span>
                 <span className="text-xs text-muted-foreground">
                   Registrada el{" "}
@@ -155,6 +178,16 @@ function ClassList({ classes }: { classes: CourseClass[] }) {
                     {formatDateTime(item.createdAt)}
                   </time>
                 </span>
+              </div>
+              <div className="flex shrink-0 gap-1">
+                <Link
+                  href={`/cursos/${courseId}/clases/${item.id}/editar`}
+                  aria-label={`Editar la clase ${item.name}`}
+                  className={buttonVariants({ variant: "ghost", size: "icon-sm" })}
+                >
+                  <Pencil aria-hidden />
+                </Link>
+                <DeleteClassButton courseId={courseId} classId={item.id} className={item.name} />
               </div>
             </li>
           ))}
