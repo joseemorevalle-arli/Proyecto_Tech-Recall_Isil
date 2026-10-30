@@ -49,6 +49,7 @@ Están descritas en `.env.example`, con el origen de cada una.
 |---|---|
 | `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` | Cuenta de servicio del Admin SDK (servidor) |
 | `FIREBASE_API_KEY` | Clave web para el REST de inicio de sesión. Solo servidor, sin `NEXT_PUBLIC_` |
+| `GEMINI_API_KEY` | Clave de la API de Gemini, para generar el curso desde el sílabo (HU06). Solo servidor |
 | `ALLOWED_EMAIL_DOMAINS` | Dominios de correo permitidos para registrarse, separados por comas |
 | `FIREBASE_AUTH_EMULATOR_HOST`, `FIRESTORE_EMULATOR_HOST` | Solo en local, para usar los emuladores (`npm run demo` las pone solo) |
 | `DEMO_ACCOUNTS`, `DEMO_PASSWORD` | Solo para la demostración local: correos institucionales y su contraseña genérica |
