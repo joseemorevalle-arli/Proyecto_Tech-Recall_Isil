@@ -61,6 +61,7 @@ Están descritas en `.env.example`, con el origen de cada una.
 | `npm run build` | Compilación de producción |
 | `npm run start` | Sirve la compilación de producción |
 | `npm run lint` | ESLint |
+| `npm test` | Pruebas automáticas (por ahora, el validador de sílabos) |
 | `npm run emulators` | Emuladores de Firebase Auth (9099) y Firestore (8080) |
 | `npm run demo` | Emuladores + cuentas de demostración + servidor de desarrollo, en un solo comando |
 | `npm run seed:demo` | Crea las cuentas de demostración (los emuladores deben estar encendidos) |
