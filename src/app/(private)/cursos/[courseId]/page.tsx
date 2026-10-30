@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CircleCheck, Video } from "lucide-react";
+import { CircleCheck, Pencil, Video } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -21,7 +21,8 @@ export const metadata: Metadata = { title: "Curso · Recall ISIL" };
 type CursoPageProps = {
   params: Promise<{ courseId: string }>;
   // ?registrada={classId}: la clase que se acaba de registrar (HU08)
-  searchParams: Promise<{ registrada?: string | string[] }>;
+  // ?editado=1: el curso se acaba de editar (CRUD de cursos)
+  searchParams: Promise<{ registrada?: string | string[]; editado?: string | string[] }>;
 };
 
 // HU07: detalle de un curso con sus unidades y sesiones. HU08: sus clases registradas.
@@ -31,7 +32,7 @@ export default async function CursoPage({
   searchParams,
 }: CursoPageProps) {
   const { courseId } = await params;
-  const { registrada } = await searchParams;
+  const { registrada, editado } = await searchParams;
   const { uid } = await requireSession();
   const course = await getCourse(uid, courseId);
 
@@ -52,9 +53,26 @@ export default async function CursoPage({
             {plural(countSessions(course), "sesión", "sesiones")}
           </p>
         </div>
-        {/* Sin clases, el botón aparece en el estado vacío */}
-        {classes.length > 0 && <RegisterClassLink courseId={course.id} />}
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href={`/cursos/${course.id}/editar`}
+            className={buttonVariants({ variant: "outline", size: "lg" })}
+          >
+            <Pencil aria-hidden />
+            Editar curso
+          </Link>
+          {/* Sin clases, el botón aparece en el estado vacío */}
+          {classes.length > 0 && <RegisterClassLink courseId={course.id} />}
+        </div>
       </div>
+
+      {editado === "1" && (
+        <Alert className="text-green-400">
+          <CircleCheck aria-hidden />
+          <AlertTitle>Curso actualizado</AlertTitle>
+          <AlertDescription>Los cambios se guardaron.</AlertDescription>
+        </Alert>
+      )}
 
       {registeredClass && (
         <Alert className="text-green-400">
