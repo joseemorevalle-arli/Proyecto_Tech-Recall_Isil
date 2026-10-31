@@ -1,8 +1,8 @@
 import { GEMINI_MODEL, type GeminiClient } from "../syllabus/generate-course.ts";
 import { parseQuiz, QUIZ_CHOICES, QUIZ_QUESTIONS, type Quiz } from "./schema.ts";
 
-// Una clase larga necesita más tiempo que leer un sílabo
-const DEFAULT_TIMEOUT_MS = 90_000;
+// Por intento. Con 2 intentos el máximo es ~110 s, por debajo de los 120 s de la página del curso (maxDuration)
+const DEFAULT_TIMEOUT_MS = 55_000;
 
 // Primer intento + un reintento (HU11, escenario 3: «lo vuelve a generar o informa el error»)
 const MAX_ATTEMPTS = 2;

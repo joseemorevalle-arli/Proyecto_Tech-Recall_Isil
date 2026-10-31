@@ -2,6 +2,7 @@ import "server-only";
 import { Timestamp } from "firebase-admin/firestore";
 import { z } from "zod";
 import { adminDb } from "@/lib/firebase/admin";
+import { quizSchema, type Quiz } from "@/lib/quiz/schema";
 
 // Forma de una clase guardada en users/{uid}/courses/{courseId}/classes/{classId}.
 // Al leer no se repite la validación del enlace: si la regla cambia, las clases antiguas se siguen mostrando.
@@ -15,10 +16,15 @@ const storedClassSchema = z.object({
     .instanceof(Timestamp)
     .transform((timestamp) => timestamp.toDate())
     .optional(),
+  // HU11: fecha en que se guardó el cuestionario. El cuestionario en sí se lee con getClassQuiz().
+  quizGeneratedAt: z
+    .instanceof(Timestamp)
+    .transform((timestamp) => timestamp.toDate())
+    .optional(),
 });
 
-// Campos que se leen de cada clase (todos menos la transcripción)
-const LISTED_FIELDS = ["name", "zoomUrl", "createdAt", "transcribedAt"] as const;
+// Campos que se leen de cada clase (todos menos la transcripción y el cuestionario)
+const LISTED_FIELDS = ["name", "zoomUrl", "createdAt", "transcribedAt", "quizGeneratedAt"] as const;
 
 export type CourseClass = z.output<typeof storedClassSchema> & { id: string };
 
@@ -51,6 +57,27 @@ export async function getClass(
 
   const parsed = storedClassSchema.safeParse(doc.data());
   return parsed.success ? { id: doc.id, ...parsed.data } : null;
+}
+
+// HU09/HU11: el texto de la transcripción y el cuestionario guardado de una clase. Solo para el servidor:
+// la transcripción pesa cientos de KB y no se manda al navegador. Igual que getClass, antes hay que haber
+// confirmado con getCourse(uid, courseId) que el curso es del estudiante.
+export async function getClassQuiz(
+  uid: string,
+  courseId: string,
+  classId: string,
+): Promise<{ name: string; transcript: string | null; quiz: Quiz | null } | null> {
+  if (!CLASS_ID_PATTERN.test(classId)) return null;
+
+  const doc = await classesCollection(uid, courseId).doc(classId).get();
+  if (!doc.exists) return null;
+
+  const data = doc.data() ?? {};
+  const name = typeof data.name === "string" ? data.name : "";
+  const transcript = typeof data.transcript === "string" && data.transcript !== "" ? data.transcript : null;
+  // Un cuestionario guardado con formato inválido se trata como si no existiera: se podrá generar de nuevo
+  const parsedQuiz = quizSchema.safeParse(data.quiz);
+  return { name, transcript, quiz: parsedQuiz.success ? parsedQuiz.data : null };
 }
 
 // Clases del curso, de la más reciente a la más antigua. Un documento con formato inválido se omite (y se registra).

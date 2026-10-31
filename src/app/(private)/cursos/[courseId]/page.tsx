@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CircleCheck, Pencil, Video } from "lucide-react";
+import { CircleCheck, ListChecks, Pencil, Video } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -16,6 +16,7 @@ import { countSessions, type CourseUnit } from "@/lib/courses/schema";
 import { formatDateTime, plural } from "../utils";
 import { BackToCourses, CourseNoAccess } from "./course-no-access";
 import { DeleteClassButton } from "./clases/[classId]/delete-class-button";
+import { GenerateQuizButton } from "./clases/[classId]/cuestionario/generate-quiz-button";
 import { ProcessClassButton } from "./clases/[classId]/process-class-button";
 import { DeleteCourseButton } from "./delete-course-button";
 
@@ -191,6 +192,19 @@ function ClassList({ classes, courseId }: { classes: CourseClass[]; courseId: st
                   className={item.name}
                   transcribed={Boolean(item.transcribedAt)}
                 />
+                {/* HU11: con transcripción, se genera o se resuelve el cuestionario */}
+                {item.transcribedAt &&
+                  (item.quizGeneratedAt ? (
+                    <Link
+                      href={`/cursos/${courseId}/clases/${item.id}/cuestionario`}
+                      className={buttonVariants({ variant: "outline", size: "sm", className: "self-start" })}
+                    >
+                      <ListChecks aria-hidden />
+                      Resolver cuestionario
+                    </Link>
+                  ) : (
+                    <GenerateQuizButton courseId={courseId} classId={item.id} className={item.name} />
+                  ))}
               </div>
               <div className="flex shrink-0 gap-1">
                 <Link
