@@ -167,10 +167,10 @@ En la lista de clases, una clase con transcripción muestra «Generar cuestionar
 ```
 
 - La acción `generateQuizAction` (`src/app/(private)/cursos/[courseId]/clases/[classId]/cuestionario/actions.ts`) exige sesión, comprueba que el curso y la clase sean del estudiante y lee la transcripción solo en el servidor.
-- `generateQuiz` (`src/lib/quiz/generate-quiz.ts`) manda a Gemini el texto de la clase sin tiempos ni nombres de quienes hablan (`vttToPlainText`). Hace como máximo 2 intentos de ~55 s cada uno.
-- `parseQuiz` (`src/lib/quiz/schema.ts`) es la única puerta: solo pasa un cuestionario de exactamente 10 preguntas, cada una con 3 alternativas distintas y una correcta (`correctIndex` de 0 a 2). Si la IA devuelve algo distinto, no se guarda ni se muestra: se reintenta una vez y luego se informa el error.
+- `generateQuiz` (`src/lib/quiz/generate-quiz.ts`) manda a Gemini el texto de la clase sin tiempos ni nombres de quienes hablan (`vttToPlainText`). Pide 13 preguntas candidatas, cada una con la frase de la clase que la respalda (`evidence`), y hace como máximo 2 intentos de ~55 s cada uno.
+- `selectSupportedQuestions` (`src/lib/quiz/select-supported-questions.ts`) es la única puerta: descarta las candidatas cuya frase de respaldo no aparece en la transcripción o que no cumplen el formato, y solo deja pasar 10 preguntas con 3 alternativas distintas y una correcta (`correctIndex` de 0 a 2). Si quedan menos de 10, no se guarda ni se muestra nada: se reintenta una vez y luego se informa el error. `parseQuiz` (`src/lib/quiz/schema.ts`) valida lo ya guardado.
 - Resolver y el puntaje corren en el navegador (`scoreQuiz`); los intentos no se guardan (historial = HU14).
-- Limitación: no hay garantía técnica de que las preguntas salgan **solo** de la transcripción; ver `docs/pruebas/sprint-2-HU11.md`.
+- Limitación: el filtro comprueba que la frase citada exista en la clase, no que sostenga la respuesta; no es una garantía de que las preguntas salgan **solo** de la transcripción. Ver `docs/pruebas/sprint-2-HU11.md`.
 - Casos de prueba y resultados: `docs/pruebas/sprint-2-HU11.md`.
 
 ## Riesgos conocidos (Sprint 1)

@@ -34,10 +34,27 @@ Capturas en `docs/pruebas/capturas/` (`HU11-01-…` a `HU11-26-…`).
 
 `npm test`: 106 pruebas en total. Las de la HU11 (31) cubren la validación estricta del cuestionario (10 preguntas, 3 alternativas distintas, una correcta, sin preguntas repetidas), la limpieza de la transcripción (se quitan tiempos y nombres de quienes hablan), el reintento, el tiempo máximo y que el texto de la clase no pueda colar instrucciones en el pedido a la IA.
 
+## Calidad: «basadas solo en la transcripción» (criterio 1)
+
+Se agregó una defensa: Gemini pide 13 preguntas candidatas y cada una debe traer la frase de la clase que la respalda, copiada textualmente. El sistema comprueba que esa frase aparezca en la transcripción (sin importar mayúsculas, tildes ni puntuación; mínimo 3 palabras y 15 caracteres), descarta las candidatas sin respaldo y entrega las 10 primeras que lo tengan. Si quedan menos de 10, cuenta como intento fallido (reintento único y luego error).
+
+**Lo observado con Gemini real**
+
+| Prueba | Resultado |
+|---|---|
+| Generador solo, 1 clase (~48 000 caracteres) | 13 candidatas, 10 entregadas. Revisé a mano las 13: todas traían una frase que sí está en la clase y las 10 respuestas se deducen de su frase. 46,9 s. |
+| A través de la app, 1 clase | Cuestionario generado, guardado (10×3, sin el campo de evidencia) y resuelto en pantalla. 29,6 s, con un primer intento fallido de Gemini. Captura HU11-27. Las preguntas de esta generación no las revisé a mano. |
+
+**Lo que esto NO demuestra**
+- En ninguna de las dos corridas el filtro descartó una candidata por falta de respaldo (las 3 sobrantes de la primera eran excedente). Está probado con pruebas automáticas, pero no se lo vio atrapar en la práctica una pregunta con conocimiento externo del modelo.
+- La comprobación es de texto: confirma que la frase citada existe en la clase, **no** que sostenga la respuesta. Un modelo podría citar una frase real y aun así preguntar otra cosa.
+- Hay 2 corridas reales sobre una sola clase.
+
 ## Límites conocidos
 
-- **«Basadas solo en la transcripción» (criterio 1) está parcialmente comprobado.** En la pasada con Gemini real, 9 de 10 preguntas tenían respaldo claro en lo dicho en la clase. En otra generación de prueba, una pregunta sobre archivos YAML mezclaba detalles que la clase no dice. La revisión fue por búsqueda de palabras clave, no una lectura completa, y sólo sobre una clase. Se le pide a la IA que no use conocimiento externo, pero no hay una garantía técnica de que lo cumpla.
-- Zoom escribe mal algunos términos técnicos en la transcripción (por ejemplo «Pon Xml» por «pom.xml»); la IA los normaliza, así que una pregunta puede nombrar algo con otra ortografía que la transcripción.
+- **Tiempo de generación:** con 13 candidatas, una llamada tardó hasta 47 s, con un tope de 55 s por intento. Si Gemini responde más lento, el intento se corta y se informa el error; es decir, queda poco margen.
+- **Gemini real con picos de demanda:** durante las pruebas devolvió error 503 en 4 de 5 llamadas seguidas en un momento dado. Con el reintento automático, a veces no alcanza y el estudiante ve el error con «Reintentar».
+- Zoom escribe mal algunos términos técnicos en la transcripción (por ejemplo «Pon Xml» por «pom.xml»). Las preguntas lo citan tal cual, con esa ortografía.
 - Los intentos de resolución no se guardan: el historial de cuestionarios es la HU14 (Sprint 3).
 - Una clase muy larga puede superar el límite de entrada de la IA; no se probó.
-- Probado una sola vez con Gemini real, en una clase de ~48 000 caracteres.
+- Solo se probó con una clase.
