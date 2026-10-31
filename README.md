@@ -49,7 +49,7 @@ Están descritas en `.env.example`, con el origen de cada una.
 |---|---|
 | `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` | Cuenta de servicio del Admin SDK (servidor) |
 | `FIREBASE_API_KEY` | Clave web para el REST de inicio de sesión. Solo servidor, sin `NEXT_PUBLIC_` |
-| `GEMINI_API_KEY` | Clave de la API de Gemini, para generar el curso desde el sílabo (HU06). Solo servidor |
+| `GEMINI_API_KEY` | Clave de la API de Gemini, para generar el curso desde el sílabo (HU06) y el cuestionario de una clase (HU11). Solo servidor |
 | `TRANSCRIPTION_SERVICE_URL` | Dirección del microservicio de transcripción (`recall_isil_api`, en Render) para la HU09. Solo servidor |
 | `TRANSCRIPTION_API_KEY` | Clave secreta compartida con el microservicio (la misma que allá se llama `TRANSCRIPTION_API_KEY`; al menos 16 caracteres, mejor 32 bytes aleatorios). Solo servidor |
 | `ALLOWED_EMAIL_DOMAINS` | Dominios de correo permitidos para registrarse, separados por comas |
@@ -153,6 +153,25 @@ En la lista de clases, cada clase tiene el botón «Obtener transcripción». Al
 - La lista de clases no lee el texto de la transcripción (`select` en `listClasses`); solo si existe. Las HU de resumen y cuestionario la leerán de `transcript`.
 - El microservicio vive en otro repositorio (`recall_isil_api`): allá la clave se configura como `TRANSCRIPTION_API_KEY` y se acepta en la cabecera `x-service-key`.
 - Casos de prueba y resultados: `docs/pruebas/sprint-2-HU09.md`.
+
+## Cuestionario de la clase (HU11)
+
+En la lista de clases, una clase con transcripción muestra «Generar cuestionario»; con el cuestionario ya generado, «Resolver cuestionario». La pantalla es `/cursos/{courseId}/clases/{classId}/cuestionario`. El cuestionario se guarda en el mismo documento de la clase:
+
+```ts
+{
+  // ...campos de la HU08 y la HU09
+  quiz: { questions: [{ question: "...", choices: ["A", "B", "C"], correctIndex: 1 }] }, // exactamente 10
+  quizGeneratedAt: Timestamp, // la pone el servidor
+}
+```
+
+- La acción `generateQuizAction` (`src/app/(private)/cursos/[courseId]/clases/[classId]/cuestionario/actions.ts`) exige sesión, comprueba que el curso y la clase sean del estudiante y lee la transcripción solo en el servidor.
+- `generateQuiz` (`src/lib/quiz/generate-quiz.ts`) manda a Gemini el texto de la clase sin tiempos ni nombres de quienes hablan (`vttToPlainText`). Hace como máximo 2 intentos de ~55 s cada uno.
+- `parseQuiz` (`src/lib/quiz/schema.ts`) es la única puerta: solo pasa un cuestionario de exactamente 10 preguntas, cada una con 3 alternativas distintas y una correcta (`correctIndex` de 0 a 2). Si la IA devuelve algo distinto, no se guarda ni se muestra: se reintenta una vez y luego se informa el error.
+- Resolver y el puntaje corren en el navegador (`scoreQuiz`); los intentos no se guardan (historial = HU14).
+- Limitación: no hay garantía técnica de que las preguntas salgan **solo** de la transcripción; ver `docs/pruebas/sprint-2-HU11.md`.
+- Casos de prueba y resultados: `docs/pruebas/sprint-2-HU11.md`.
 
 ## Riesgos conocidos (Sprint 1)
 
