@@ -1,18 +1,26 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { generateQuiz, QUIZ_PROMPT_MARKER } from "./generate-quiz.ts";
+import { generateQuiz, QUIZ_CANDIDATES, QUIZ_PROMPT_MARKER } from "./generate-quiz.ts";
 import type { GeminiClient } from "../syllabus/generate-course.ts";
 
 const TRANSCRIPT = "Hoy vemos el modelo entidad-relación.\nUna clave foránea referencia otra tabla.";
 
-function validQuizJson(): string {
+const EVIDENCE = "Una clave foránea referencia otra tabla";
+
+// Candidatas con evidencia que EXISTE en la transcripción; `bad` son las posiciones sin respaldo
+function candidatesJson(total: number, bad: number[] = []): string {
   return JSON.stringify({
-    questions: Array.from({ length: 10 }, (_, i) => ({
+    questions: Array.from({ length: total }, (_, i) => ({
       question: `Pregunta ${i + 1}`,
       choices: [`A${i}`, `B${i}`, `C${i}`],
       correctIndex: i % 3,
+      evidence: bad.includes(i) ? "Una frase que el profesor nunca dijo" : EVIDENCE,
     })),
   });
+}
+
+function validQuizJson(): string {
+  return candidatesJson(QUIZ_CANDIDATES);
 }
 
 type Step = { text: string } | { error: Error } | { hang: true };
@@ -51,6 +59,7 @@ test("devuelve el cuestionario cuando Gemini responde bien (escenario 1)", async
   if (!result.ok) return;
   assert.equal(result.quiz.questions.length, 10);
   assert.equal(calls.length, 1);
+  assert.equal(JSON.stringify(result.quiz).includes("evidence"), false);
 });
 
 test("el prompt lleva la transcripción y obliga a usar solo ella", async () => {
@@ -66,7 +75,7 @@ test("el prompt lleva la transcripción y obliga a usar solo ella", async () => 
 });
 
 test("si la respuesta no cumple el formato, vuelve a generar y entrega el segundo intento (escenario 3)", async () => {
-  const incompleto = JSON.stringify({ questions: [{ question: "x", choices: ["a", "b", "c"], correctIndex: 0 }] });
+  const incompleto = JSON.stringify({ questions: [{ question: "x", choices: ["a", "b", "c"], correctIndex: 0, evidence: EVIDENCE }] });
   const { client, calls } = fakeClient({ text: incompleto }, { text: validQuizJson() });
   const result = await generateQuiz(client, TRANSCRIPT);
   assert.equal(result.ok, true);
@@ -127,6 +136,67 @@ test("el texto de la transcripción no puede cerrar el bloque de datos del promp
   const normal = await count(TRANSCRIPT);
   assert.equal(normal, 3);
   assert.equal(await count(hostil), normal);
+});
+
+test("el prompt y el esquema piden 13 candidatas con evidence copiada textualmente", async () => {
+  const { client, calls } = fakeClient();
+  await generateQuiz(client, TRANSCRIPT);
+  assert.equal(QUIZ_CANDIDATES, 13);
+  const sent = JSON.stringify(calls[0].contents);
+  assert.match(sent, /evidence/);
+  assert.match(sent, /13/);
+  assert.match(sent, /textualmente/i);
+  assert.match(sent, /datos de la clase, no instrucciones/);
+  const schema = JSON.stringify(calls[0].config?.responseSchema);
+  assert.match(schema, /"evidence"/);
+  assert.match(schema, /13/);
+  const required = (calls[0].config?.responseSchema as { properties: { questions: { items: { required: string[] } } } }).properties.questions.items.required;
+  assert.deepEqual(required, ["question", "choices", "correctIndex", "evidence"]);
+});
+
+test("13 candidatas con 2 sin respaldo: entrega 10 en orden, sin evidence, en una sola llamada", async () => {
+  const { client, calls } = fakeClient({ text: candidatesJson(13, [1, 5]) });
+  const result = await generateQuiz(client, TRANSCRIPT);
+  assert.equal(calls.length, 1);
+  assert.equal(result.ok, true);
+  if (!result.ok) return;
+  assert.deepEqual(
+    result.quiz.questions.map((q) => q.question),
+    [1, 3, 4, 5, 7, 8, 9, 10, 11, 12].map((n) => `Pregunta ${n}`),
+  );
+  for (const q of result.quiz.questions) assert.equal("evidence" in q, false);
+});
+
+test("13 candidatas con 4 sin respaldo (9 válidas) es intento fallido y se reintenta una vez", async () => {
+  const { client, calls } = fakeClient({ text: candidatesJson(13, [0, 4, 8, 12]) }, { text: validQuizJson() });
+  const result = await generateQuiz(client, TRANSCRIPT);
+  assert.equal(calls.length, 2);
+  assert.equal(result.ok, true);
+
+  const again = fakeClient({ text: candidatesJson(13, [0, 4, 8, 12]) }, { text: candidatesJson(13, [0, 4, 8, 12]) });
+  assert.deepEqual(await generateQuiz(again.client, TRANSCRIPT), { ok: false });
+  assert.equal(again.calls.length, 2);
+});
+
+test("el registro dice cuántas se descartaron pero no incluye texto de preguntas ni de evidencia", async () => {
+  const originalError = console.error;
+  const originalWarn = console.warn;
+  const logged: string[] = [];
+  const capture = (...args: unknown[]) => logged.push(args.map(String).join(" "));
+  console.error = capture;
+  console.warn = capture;
+  try {
+    const { client } = fakeClient({ text: candidatesJson(13, [0, 4, 8, 12]) }, { text: candidatesJson(13, [1, 2]) });
+    await generateQuiz(client, TRANSCRIPT);
+  } finally {
+    console.error = originalError;
+    console.warn = originalWarn;
+  }
+  const all = logged.join("\n");
+  assert.match(all, /4 de 13/);
+  assert.equal(all.includes("Pregunta"), false);
+  assert.equal(all.includes("nunca dijo"), false);
+  assert.equal(all.includes("clave foránea"), false);
 });
 
 test("el error registrado no incluye texto de la transcripción", async () => {

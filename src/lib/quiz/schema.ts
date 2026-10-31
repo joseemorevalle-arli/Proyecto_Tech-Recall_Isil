@@ -8,7 +8,7 @@ const text = z.string().trim().min(1);
 
 // correctIndex es la posición (0, 1 o 2) de la alternativa correcta. Un solo número garantiza
 // que haya exactamente una correcta; lo que hay que evitar es que dos alternativas digan lo mismo.
-const questionSchema = z
+export const questionSchema = z
   .object({
     question: text,
     choices: z.array(text).length(QUIZ_CHOICES),
