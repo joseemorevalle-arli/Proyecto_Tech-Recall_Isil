@@ -50,6 +50,8 @@ Están descritas en `.env.example`, con el origen de cada una.
 | `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` | Cuenta de servicio del Admin SDK (servidor) |
 | `FIREBASE_API_KEY` | Clave web para el REST de inicio de sesión. Solo servidor, sin `NEXT_PUBLIC_` |
 | `GEMINI_API_KEY` | Clave de la API de Gemini, para generar el curso desde el sílabo (HU06). Solo servidor |
+| `TRANSCRIPTION_SERVICE_URL` | Dirección del microservicio de transcripción (`recall_isil_api`, en Render) para la HU09. Solo servidor |
+| `TRANSCRIPTION_API_KEY` | Clave secreta compartida con el microservicio (la misma que allá se llama `TRANSCRIPTION_API_KEY`; al menos 16 caracteres, mejor 32 bytes aleatorios). Solo servidor |
 | `ALLOWED_EMAIL_DOMAINS` | Dominios de correo permitidos para registrarse, separados por comas |
 | `FIREBASE_AUTH_EMULATOR_HOST`, `FIRESTORE_EMULATOR_HOST` | Solo en local, para usar los emuladores (`npm run demo` las pone solo) |
 | `DEMO_ACCOUNTS`, `DEMO_PASSWORD` | Solo para la demostración local: correos institucionales y su contraseña genérica |
@@ -132,6 +134,25 @@ Cada clase es un documento en `users/{uid}/courses/{courseId}/classes/{classId}`
 
 - En la lista de clases, el lápiz abre `/cursos/{courseId}/clases/{classId}/editar` (el mismo formulario del registro, con los datos actuales y las mismas reglas del enlace y del nombre) y el tacho pide confirmación antes de eliminarla.
 - Las acciones (`src/app/(private)/cursos/[courseId]/clases/[classId]/actions.ts`) exigen sesión, comprueban que el curso sea del estudiante y que la clase pertenezca a ese curso (`getClass`). Con un curso ajeno responden «No tienes acceso a este curso»; con una clase que no está en el curso, «No encontramos esa clase…».
+
+## Transcripción de la clase (HU09)
+
+En la lista de clases, cada clase tiene el botón «Obtener transcripción». Al pulsarlo, la acción `processClassAction` (`src/app/(private)/cursos/[courseId]/clases/[classId]/actions.ts`) lee el enlace de Zoom **de la clase guardada** (nunca del formulario), pide la transcripción y la guarda en el mismo documento de la clase:
+
+```ts
+{
+  // ...campos de la HU08
+  transcript: "WEBVTT\n\n1\n00:04:55.780 --> ...", // el VTT completo
+  transcribedAt: Timestamp, // la pone el servidor
+}
+```
+
+- El cliente (`src/lib/transcription/client.ts`) llama a `POST {TRANSCRIPTION_SERVICE_URL}/api/transcription/v3` con la cabecera `x-service-key`. El servicio responde la dirección del VTT y la app lo descarga, solo desde `https://isil-pe.zoom.us/rec/play/vtt` (cualquier otra dirección se rechaza).
+- Tres resultados: **lista** (se guarda y la clase muestra «Transcripción lista»), **sin subtítulos** («Esta grabación no tiene transcripción disponible», no se guarda nada) y **error** (servicio caído, arranque en frío o más de 2 minutos: se muestra el error y el botón pasa a «Reintentar»; el nombre y el enlace de la clase no se tocan).
+- Límite: el VTT que supera ~800 KB no se guarda (Firestore admite 1 MiB por documento). La grabación de prueba pesó ~96 KB.
+- La lista de clases no lee el texto de la transcripción (`select` en `listClasses`); solo si existe. Las HU de resumen y cuestionario la leerán de `transcript`.
+- El microservicio vive en otro repositorio (`recall_isil_api`): allá la clave se configura como `TRANSCRIPTION_API_KEY` y se acepta en la cabecera `x-service-key`.
+- Casos de prueba y resultados: `docs/pruebas/sprint-2-HU09.md`.
 
 ## Riesgos conocidos (Sprint 1)
 
