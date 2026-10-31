@@ -16,9 +16,13 @@ import { countSessions, type CourseUnit } from "@/lib/courses/schema";
 import { formatDateTime, plural } from "../utils";
 import { BackToCourses, CourseNoAccess } from "./course-no-access";
 import { DeleteClassButton } from "./clases/[classId]/delete-class-button";
+import { ProcessClassButton } from "./clases/[classId]/process-class-button";
 import { DeleteCourseButton } from "./delete-course-button";
 
 export const metadata: Metadata = { title: "Curso · Recall ISIL" };
+
+// HU09: obtener la transcripción puede tardar (arranque en frío del servicio); aplica a la acción de esta página
+export const maxDuration = 120;
 
 type CursoPageProps = {
   params: Promise<{ courseId: string }>;
@@ -170,14 +174,23 @@ function ClassList({ classes, courseId }: { classes: CourseClass[]; courseId: st
                 className="mt-0.5 size-4 shrink-0 text-muted-foreground"
                 aria-hidden
               />
-              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="font-medium break-words">{item.name}</span>
-                <span className="text-xs text-muted-foreground">
-                  Registrada el{" "}
-                  <time dateTime={item.createdAt.toISOString()}>
-                    {formatDateTime(item.createdAt)}
-                  </time>
-                </span>
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <div className="flex flex-col gap-0.5">
+                  <span className="font-medium break-words">{item.name}</span>
+                  <span className="text-xs text-muted-foreground">
+                    Registrada el{" "}
+                    <time dateTime={item.createdAt.toISOString()}>
+                      {formatDateTime(item.createdAt)}
+                    </time>
+                  </span>
+                </div>
+                {/* HU09: obtener la transcripción de la grabación */}
+                <ProcessClassButton
+                  courseId={courseId}
+                  classId={item.id}
+                  className={item.name}
+                  transcribed={Boolean(item.transcribedAt)}
+                />
               </div>
               <div className="flex shrink-0 gap-1">
                 <Link

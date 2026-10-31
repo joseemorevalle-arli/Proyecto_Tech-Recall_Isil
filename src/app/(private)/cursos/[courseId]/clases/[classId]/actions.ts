@@ -8,9 +8,24 @@ import { requireSession } from "@/lib/auth/session";
 import { classesCollection, getClass } from "@/lib/classes/queries";
 import { CLASS_MESSAGES, classSchema } from "@/lib/classes/schema";
 import { getCourse } from "@/lib/courses/queries";
+import {
+  fetchTranscript,
+  TRANSCRIPT_MESSAGES,
+  transcriptionConfigFromEnv,
+} from "@/lib/transcription/client";
 import type { RegisterClassState } from "../nueva/actions";
 
 export type DeleteClassState = { formError?: string };
+
+// HU09: resultado de procesar una clase. "done" = transcripción guardada; "no-transcript" = escenario 3;
+// "error" = escenario 2 (el estudiante puede reintentar: la clase conserva su nombre y su enlace).
+export type ProcessClassState = {
+  status?: "done" | "no-transcript" | "error";
+  message?: string;
+};
+
+const PROCESS_GENERIC_ERROR =
+  "No pudimos guardar la transcripción. Inténtalo de nuevo en unos minutos.";
 
 const CLASS_NOT_FOUND = "No encontramos esa clase. Puede que ya la hayas eliminado.";
 
@@ -57,6 +72,47 @@ export async function editClassAction(
   // redirect() va fuera del try/catch porque funciona lanzando una excepción
   revalidatePath(`/cursos/${courseId}`);
   redirect(`/cursos/${courseId}?clase-editada=${classId}`);
+}
+
+// HU09: obtiene la transcripción de la grabación y la guarda en la clase.
+// El enlace de Zoom sale de la clase guardada (nunca del formulario) y la clase tiene que ser del estudiante.
+export async function processClassAction(
+  _prevState: ProcessClassState,
+  formData: FormData,
+): Promise<ProcessClassState> {
+  const courseId = String(formData.get("courseId") ?? "");
+  const classId = String(formData.get("classId") ?? "");
+
+  let own: Awaited<ReturnType<typeof ownClass>>;
+  try {
+    own = await ownClass(courseId, classId);
+  } catch (error) {
+    console.error("Error al buscar la clase a procesar:", error instanceof Error ? error.name : "desconocido");
+    return { status: "error", message: PROCESS_GENERIC_ERROR };
+  }
+  if ("error" in own) return { status: "error", message: own.error };
+
+  const result = await fetchTranscript(own.found.zoomUrl, transcriptionConfigFromEnv());
+  if (result.status === "no-transcript") {
+    return { status: "no-transcript", message: TRANSCRIPT_MESSAGES.noTranscript };
+  }
+  if (result.status === "error") return { status: "error", message: result.message };
+
+  try {
+    await classesCollection(own.uid, own.course.id)
+      .doc(own.found.id)
+      .update({
+        transcript: result.vtt,
+        transcribedAt: FieldValue.serverTimestamp(),
+      });
+  } catch (error) {
+    console.error("Error al guardar la transcripción:", error instanceof Error ? error.name : "desconocido");
+    return { status: "error", message: PROCESS_GENERIC_ERROR };
+  }
+
+  // La lista del curso muestra el nuevo estado («transcripción lista»)
+  revalidatePath(`/cursos/${courseId}`);
+  return { status: "done" };
 }
 
 // CRUD de clases: elimina una clase. No se puede deshacer; la pantalla pide confirmación antes.

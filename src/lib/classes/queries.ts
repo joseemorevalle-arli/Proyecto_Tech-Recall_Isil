@@ -9,7 +9,16 @@ const storedClassSchema = z.object({
   name: z.string().min(1),
   zoomUrl: z.string().min(1),
   createdAt: z.instanceof(Timestamp).transform((timestamp) => timestamp.toDate()),
+  // HU09: fecha en que se guardó la transcripción. El texto (transcript) no se lee aquí: puede pesar
+  // cientos de KB y la lista de clases solo necesita saber si ya existe.
+  transcribedAt: z
+    .instanceof(Timestamp)
+    .transform((timestamp) => timestamp.toDate())
+    .optional(),
 });
+
+// Campos que se leen de cada clase (todos menos la transcripción)
+const LISTED_FIELDS = ["name", "zoomUrl", "createdAt", "transcribedAt"] as const;
 
 export type CourseClass = z.output<typeof storedClassSchema> & { id: string };
 
@@ -38,6 +47,7 @@ export async function getClass(
 
   const doc = await classesCollection(uid, courseId).doc(classId).get();
   if (!doc.exists) return null;
+  // El texto de la transcripción queda fuera del objeto: lo usarán las HU de resumen y cuestionario
 
   const parsed = storedClassSchema.safeParse(doc.data());
   return parsed.success ? { id: doc.id, ...parsed.data } : null;
@@ -50,6 +60,7 @@ export async function listClasses(
 ): Promise<CourseClass[]> {
   const snapshot = await classesCollection(uid, courseId)
     .orderBy("createdAt", "desc")
+    .select(...LISTED_FIELDS)
     .get();
 
   const classes: CourseClass[] = [];
