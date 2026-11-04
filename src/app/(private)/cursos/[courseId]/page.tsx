@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CircleCheck, Video } from "lucide-react";
+import { BookOpenText, CircleCheck, ListChecks, Pencil, Video } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -15,13 +15,26 @@ import { getCourse } from "@/lib/courses/queries";
 import { countSessions, type CourseUnit } from "@/lib/courses/schema";
 import { formatDateTime, plural } from "../utils";
 import { BackToCourses, CourseNoAccess } from "./course-no-access";
+import { DeleteClassButton } from "./clases/[classId]/delete-class-button";
+import { GenerateQuizButton } from "./clases/[classId]/cuestionario/generate-quiz-button";
+import { ProcessClassButton } from "./clases/[classId]/process-class-button";
+import { DeleteCourseButton } from "./delete-course-button";
 
 export const metadata: Metadata = { title: "Curso · Recall ISIL" };
+
+// HU09: obtener la transcripción puede tardar (arranque en frío del servicio); aplica a la acción de esta página
+export const maxDuration = 120;
 
 type CursoPageProps = {
   params: Promise<{ courseId: string }>;
   // ?registrada={classId}: la clase que se acaba de registrar (HU08)
-  searchParams: Promise<{ registrada?: string | string[] }>;
+  // ?editado=1: el curso se acaba de editar. ?clase-editada={id} y ?clase-eliminada=1: CRUD de clases
+  searchParams: Promise<{
+    registrada?: string | string[];
+    editado?: string | string[];
+    "clase-editada"?: string | string[];
+    "clase-eliminada"?: string | string[];
+  }>;
 };
 
 // HU07: detalle de un curso con sus unidades y sesiones. HU08: sus clases registradas.
@@ -31,7 +44,8 @@ export default async function CursoPage({
   searchParams,
 }: CursoPageProps) {
   const { courseId } = await params;
-  const { registrada } = await searchParams;
+  const { registrada, editado, "clase-eliminada": claseEliminada } = await searchParams;
+  const claseEditada = (await searchParams)["clase-editada"];
   const { uid } = await requireSession();
   const course = await getCourse(uid, courseId);
 
@@ -52,9 +66,47 @@ export default async function CursoPage({
             {plural(countSessions(course), "sesión", "sesiones")}
           </p>
         </div>
-        {/* Sin clases, el botón aparece en el estado vacío */}
-        {classes.length > 0 && <RegisterClassLink courseId={course.id} />}
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href={`/cursos/${course.id}/editar`}
+            className={buttonVariants({ variant: "outline", size: "lg" })}
+          >
+            <Pencil aria-hidden />
+            Editar curso
+          </Link>
+          {/* Sin clases, el botón aparece en el estado vacío */}
+          {classes.length > 0 && <RegisterClassLink courseId={course.id} />}
+          <DeleteCourseButton
+            courseId={course.id}
+            courseName={course.name}
+            classCount={classes.length}
+          />
+        </div>
       </div>
+
+      {claseEliminada === "1" && (
+        <Alert className="text-green-400">
+          <CircleCheck aria-hidden />
+          <AlertTitle>Clase eliminada</AlertTitle>
+          <AlertDescription>La clase se borró del curso.</AlertDescription>
+        </Alert>
+      )}
+
+      {typeof claseEditada === "string" && classes.some((item) => item.id === claseEditada) && (
+        <Alert className="text-green-400">
+          <CircleCheck aria-hidden />
+          <AlertTitle>Clase actualizada</AlertTitle>
+          <AlertDescription>Los cambios de la clase se guardaron.</AlertDescription>
+        </Alert>
+      )}
+
+      {editado === "1" && (
+        <Alert className="text-green-400">
+          <CircleCheck aria-hidden />
+          <AlertTitle>Curso actualizado</AlertTitle>
+          <AlertDescription>Los cambios se guardaron.</AlertDescription>
+        </Alert>
+      )}
 
       {registeredClass && (
         <Alert className="text-green-400">
@@ -71,7 +123,7 @@ export default async function CursoPage({
         {classes.length === 0 ? (
           <EmptyClasses courseId={course.id} />
         ) : (
-          <ClassList classes={classes} />
+          <ClassList classes={classes} courseId={course.id} />
         )}
       </div>
 
@@ -109,7 +161,7 @@ function RegisterClassLink({ courseId }: { courseId: string }) {
 }
 
 // Clases del curso, de la más reciente a la más antigua
-function ClassList({ classes }: { classes: CourseClass[] }) {
+function ClassList({ classes, courseId }: { classes: CourseClass[]; courseId: string }) {
   return (
     <Card>
       <CardContent>
@@ -123,14 +175,63 @@ function ClassList({ classes }: { classes: CourseClass[] }) {
                 className="mt-0.5 size-4 shrink-0 text-muted-foreground"
                 aria-hidden
               />
-              <div className="flex min-w-0 flex-col gap-0.5">
-                <span className="font-medium break-words">{item.name}</span>
-                <span className="text-xs text-muted-foreground">
-                  Registrada el{" "}
-                  <time dateTime={item.createdAt.toISOString()}>
-                    {formatDateTime(item.createdAt)}
-                  </time>
-                </span>
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <div className="flex flex-col gap-0.5">
+                  {/* HU10/HU13/HU17: el detalle de la clase tiene la grabación, el resumen y la carga manual */}
+                  <Link
+                    href={`/cursos/${courseId}/clases/${item.id}`}
+                    className="font-medium break-words underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+                  >
+                    {item.name}
+                  </Link>
+                  <span className="text-xs text-muted-foreground">
+                    Registrada el{" "}
+                    <time dateTime={item.createdAt.toISOString()}>
+                      {formatDateTime(item.createdAt)}
+                    </time>
+                  </span>
+                </div>
+                {/* HU09: obtener la transcripción de la grabación */}
+                <ProcessClassButton
+                  courseId={courseId}
+                  classId={item.id}
+                  className={item.name}
+                  transcribed={Boolean(item.transcribedAt)}
+                  manualUploadHref={`/cursos/${courseId}/clases/${item.id}#transcripcion`}
+                />
+                {/* HU10: con transcripción, el resumen está en el detalle de la clase */}
+                {item.transcribedAt && (
+                  <Link
+                    href={`/cursos/${courseId}/clases/${item.id}#resumen`}
+                    className={buttonVariants({ variant: "outline", size: "sm", className: "self-start" })}
+                  >
+                    <BookOpenText aria-hidden />
+                    {item.summaryGeneratedAt ? "Ver resumen" : "Generar resumen"}
+                  </Link>
+                )}
+                {/* HU11: con transcripción, se genera o se resuelve el cuestionario */}
+                {item.transcribedAt &&
+                  (item.quizGeneratedAt ? (
+                    <Link
+                      href={`/cursos/${courseId}/clases/${item.id}/cuestionario`}
+                      className={buttonVariants({ variant: "outline", size: "sm", className: "self-start" })}
+                    >
+                      <ListChecks aria-hidden />
+                      Resolver cuestionario
+                    </Link>
+                  ) : (
+                    <GenerateQuizButton courseId={courseId} classId={item.id} className={item.name} />
+                  ))}
+              </div>
+              <div className="flex shrink-0 gap-1">
+                <Link
+                  href={`/cursos/${courseId}/clases/${item.id}/editar`}
+                  aria-label={`Editar la clase ${item.name}`}
+                  className={buttonVariants({ variant: "ghost", size: "icon-sm" })}
+                >
+                  <Pencil aria-hidden />
+                </Link>
+                <DeleteClassButton courseId={courseId} classId={item.id} className={item.name} />
               </div>
             </li>
           ))}

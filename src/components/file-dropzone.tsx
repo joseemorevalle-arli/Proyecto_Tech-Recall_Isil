@@ -11,6 +11,9 @@ interface FileDropzoneProps {
   file: File | null;
   onFileChange: (file: File | null) => void;
   disabled?: boolean;
+  // Textos de la zona. Por defecto, los del sílabo (HU05)
+  label?: string;
+  hint?: string;
 }
 
 function formatSize(bytes: number): string {
@@ -20,7 +23,15 @@ function formatSize(bytes: number): string {
 
 // Zona para elegir un archivo haciendo clic o arrastrándolo. Se puede usar con el teclado:
 // el <input> real queda oculto pero enfocable y la etiqueta lo activa.
-export function FileDropzone({ id, accept, file, onFileChange, disabled }: FileDropzoneProps) {
+export function FileDropzone({
+  id,
+  accept,
+  file,
+  onFileChange,
+  disabled,
+  label = "Arrastra tu sílabo aquí o haz clic para elegirlo",
+  hint = "PDF, hasta 5 MB",
+}: FileDropzoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -58,8 +69,8 @@ export function FileDropzone({ id, accept, file, onFileChange, disabled }: FileD
         )}
       >
         <Upload className="size-6 text-muted-foreground" aria-hidden />
-        <span className="text-sm font-medium">Arrastra tu sílabo aquí o haz clic para elegirlo</span>
-        <span className="text-xs text-muted-foreground">PDF, hasta 5 MB</span>
+        <span className="text-sm font-medium">{label}</span>
+        <span className="text-xs text-muted-foreground">{hint}</span>
         <input
           ref={inputRef}
           id={id}

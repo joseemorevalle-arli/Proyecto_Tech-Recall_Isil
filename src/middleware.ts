@@ -13,5 +13,5 @@ export function middleware(request: NextRequest) {
 
 // Rutas privadas. Las nuevas HU agregan aquí sus rutas (por ejemplo, "/clases/:path*").
 export const config = {
-  matcher: ["/cursos/:path*", "/cargar-silabo"],
+  matcher: ["/cursos/:path*", "/cargar-silabo", "/historial"],
 };

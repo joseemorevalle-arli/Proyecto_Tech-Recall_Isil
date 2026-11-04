@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { BookOpen, FileUp } from "lucide-react";
+import { BookOpen, CircleCheck, FileUp } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -18,7 +19,13 @@ import { UPLOAD_SYLLABUS_PATH, plural } from "./utils";
 export const metadata: Metadata = { title: "Mis cursos · Recall ISIL" };
 
 // HU07: lista de los cursos del estudiante. Solo lee users/{uid}/courses con el uid de la sesión.
-export default async function CursosPage() {
+export default async function CursosPage({
+  searchParams,
+}: {
+  // ?eliminado=1: se acaba de eliminar un curso (CRUD de cursos)
+  searchParams: Promise<{ eliminado?: string | string[] }>;
+}) {
+  const { eliminado } = await searchParams;
   const session = await requireSession();
   const courses = await listCourses(session.uid);
 
@@ -42,6 +49,14 @@ export default async function CursosPage() {
           <LogoutButton />
         </div>
       </div>
+
+      {eliminado === "1" && (
+        <Alert className="text-green-400">
+          <CircleCheck aria-hidden />
+          <AlertTitle>Curso eliminado</AlertTitle>
+          <AlertDescription>El curso y sus clases se borraron.</AlertDescription>
+        </Alert>
+      )}
 
       {courses.length === 0 ? (
         <EmptyCourses />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldLabel } from "@/components/ui/field";
@@ -13,9 +14,10 @@ export default function CargarSilaboPage() {
   const [mensaje, setMensaje] = useState<{ tipo: "exito" | "error"; texto: string } | null>(null);
   const [silaboValidado, setSilaboValidado] = useState(false);
 
-  // Estados de la HU06 (la generación real llega en esa historia)
+  // Estados de la HU06: generación del curso
   const [generandoCurso, setGenerandoCurso] = useState(false);
   const [errorGeneracion, setErrorGeneracion] = useState<string | null>(null);
+  const [cursoId, setCursoId] = useState<string | null>(null);
 
   const handleFileChange = (file: File | null) => {
     // Al elegir otro archivo (o quitarlo) se pierde la validación anterior
@@ -23,6 +25,7 @@ export default function CargarSilaboPage() {
     setSilaboValidado(false);
     setMensaje(null);
     setErrorGeneracion(null);
+    setCursoId(null);
   };
 
   const handleUpload = async (e: React.FormEvent) => {
@@ -33,6 +36,7 @@ export default function CargarSilaboPage() {
     setMensaje(null);
     setSilaboValidado(false);
     setErrorGeneracion(null);
+    setCursoId(null);
 
     const formData = new FormData();
     formData.append("silabo", archivo);
@@ -49,14 +53,28 @@ export default function CargarSilaboPage() {
     }
   };
 
+  // Se vuelve a enviar el mismo archivo que ya está en pantalla: reintentar no obliga a subirlo de nuevo
   const handleGenerarCurso = async () => {
+    if (!archivo || generandoCurso || cursoId) return;
+
     setGenerandoCurso(true);
     setErrorGeneracion(null);
 
-    const resultado = await generarEstructuraCurso();
+    const formData = new FormData();
+    formData.append("silabo", archivo);
 
-    setGenerandoCurso(false);
-    if (!resultado.exito) setErrorGeneracion(resultado.mensaje);
+    try {
+      const resultado = await generarEstructuraCurso(formData);
+      if (resultado.exito && resultado.cursoId) {
+        setCursoId(resultado.cursoId);
+      } else {
+        setErrorGeneracion(resultado.mensaje);
+      }
+    } catch {
+      setErrorGeneracion("No se pudo generar el curso. Inténtalo de nuevo.");
+    } finally {
+      setGenerandoCurso(false);
+    }
   };
 
   return (
@@ -78,11 +96,11 @@ export default function CargarSilaboPage() {
                 accept=".pdf"
                 file={archivo}
                 onFileChange={handleFileChange}
-                disabled={cargando || generandoCurso}
+                disabled={cargando || generandoCurso || !!cursoId}
               />
             </Field>
 
-            <Button type="submit" className="w-full" disabled={!archivo || cargando || generandoCurso}>
+            <Button type="submit" className="w-full" disabled={!archivo || cargando || generandoCurso || !!cursoId}>
               {cargando ? "Validando sílabo..." : "Validar Sílabo"}
             </Button>
           </form>
@@ -105,10 +123,26 @@ export default function CargarSilaboPage() {
             type="button"
             onClick={handleGenerarCurso}
             className="w-full"
-            disabled={!silaboValidado || generandoCurso}
+            disabled={!silaboValidado || generandoCurso || !!cursoId}
           >
-            {generandoCurso ? "Generando curso..." : "Generar Curso"}
+            {generandoCurso
+              ? "Generando curso... puede tardar un momento"
+              : errorGeneracion
+                ? "Reintentar Generar Curso"
+                : "Generar Curso"}
           </Button>
+
+          {cursoId && (
+            <div
+              role="status"
+              className="space-y-3 p-4 rounded-md bg-green-500/10 border border-green-500 text-green-400 text-center"
+            >
+              <p>¡Curso creado y guardado en tu cuenta!</p>
+              <Link href={`/cursos/${cursoId}`} className="underline underline-offset-4">
+                Ver mi curso
+              </Link>
+            </div>
+          )}
 
           {errorGeneracion && (
             <div
