@@ -6,6 +6,7 @@ import { requireSession } from "@/lib/auth/session";
 import { CLASS_MESSAGES } from "@/lib/classes/schema";
 import { getCourse } from "@/lib/courses/queries";
 import { adminDb } from "@/lib/firebase/admin";
+import { deleteAttempts } from "@/lib/quiz/attempt-queries";
 
 export type DeleteCourseState = { formError?: string };
 
@@ -31,6 +32,8 @@ export async function deleteCourseAction(
     // un delete() simple dejaría las clases huérfanas, sin forma de verlas ni de borrarlas después.
     const db = adminDb();
     await db.recursiveDelete(db.collection("users").doc(uid).collection("courses").doc(course.id));
+    // HU14: los intentos de sus cuestionarios también se borran del historial
+    await deleteAttempts(uid, "courseId", course.id);
   } catch (error) {
     console.error("Error al eliminar el curso:", error instanceof Error ? error.name : "desconocido");
     return { formError: GENERIC_ERROR };
