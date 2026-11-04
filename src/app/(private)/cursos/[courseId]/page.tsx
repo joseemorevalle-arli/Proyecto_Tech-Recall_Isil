@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CircleCheck, ListChecks, Pencil, Video } from "lucide-react";
+import { BookOpenText, CircleCheck, ListChecks, Pencil, Video } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -177,7 +177,13 @@ function ClassList({ classes, courseId }: { classes: CourseClass[]; courseId: st
               />
               <div className="flex min-w-0 flex-1 flex-col gap-2">
                 <div className="flex flex-col gap-0.5">
-                  <span className="font-medium break-words">{item.name}</span>
+                  {/* HU10/HU13/HU17: el detalle de la clase tiene la grabación, el resumen y la carga manual */}
+                  <Link
+                    href={`/cursos/${courseId}/clases/${item.id}`}
+                    className="font-medium break-words underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
+                  >
+                    {item.name}
+                  </Link>
                   <span className="text-xs text-muted-foreground">
                     Registrada el{" "}
                     <time dateTime={item.createdAt.toISOString()}>
@@ -191,7 +197,18 @@ function ClassList({ classes, courseId }: { classes: CourseClass[]; courseId: st
                   classId={item.id}
                   className={item.name}
                   transcribed={Boolean(item.transcribedAt)}
+                  manualUploadHref={`/cursos/${courseId}/clases/${item.id}#transcripcion`}
                 />
+                {/* HU10: con transcripción, el resumen está en el detalle de la clase */}
+                {item.transcribedAt && (
+                  <Link
+                    href={`/cursos/${courseId}/clases/${item.id}#resumen`}
+                    className={buttonVariants({ variant: "outline", size: "sm", className: "self-start" })}
+                  >
+                    <BookOpenText aria-hidden />
+                    {item.summaryGeneratedAt ? "Ver resumen" : "Generar resumen"}
+                  </Link>
+                )}
                 {/* HU11: con transcripción, se genera o se resuelve el cuestionario */}
                 {item.transcribedAt &&
                   (item.quizGeneratedAt ? (
