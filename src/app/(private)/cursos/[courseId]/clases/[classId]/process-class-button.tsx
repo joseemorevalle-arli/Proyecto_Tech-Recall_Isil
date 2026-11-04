@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import Link from "next/link";
 import { AlertCircle, CircleCheck, FileText, Info, Loader2, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { processClassAction, type ProcessClassState } from "./actions";
@@ -14,12 +15,15 @@ export function ProcessClassButton({
   classId,
   className,
   transcribed,
+  manualUploadHref,
 }: {
   courseId: string;
   classId: string;
   className: string;
   // true si la clase ya tiene transcripción guardada
   transcribed: boolean;
+  // HU17: en la lista del curso, enlace a la carga manual cuando Zoom no da la transcripción
+  manualUploadHref?: string;
 }) {
   const [state, formAction, pending] = useActionState(processClassAction, initialState);
   const isDone = transcribed || state.status === "done";
@@ -57,6 +61,12 @@ export function ProcessClassButton({
           <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
           {state.message}
         </p>
+      )}
+
+      {!pending && manualUploadHref && (state.status === "no-transcript" || state.status === "error") && (
+        <Link href={manualUploadHref} className="text-sm text-primary underline-offset-4 hover:underline">
+          Subir la transcripción manualmente
+        </Link>
       )}
 
       {/* Una clase ya transcrita no vuelve a pedirse; las demás muestran Procesar o, tras un error, Reintentar */}

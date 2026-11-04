@@ -52,3 +52,17 @@ test("quita las etiquetas de formato del VTT", () => {
   const vtt = "WEBVTT\n\n00:00:01.000 --> 00:00:02.000\n<v Ana>Hola <b>a todos</b></v>\n";
   assert.equal(vttToPlainText(vtt), "Hola a todos");
 });
+
+test("transcriptToPlainText: un VTT se limpia igual que con vttToPlainText", async () => {
+  const { transcriptToPlainText } = await import("./text.ts");
+  assert.equal(transcriptToPlainText(VTT), vttToPlainText(VTT));
+});
+
+test("transcriptToPlainText: un TXT (HU17) se conserva, sin líneas vacías ni espacios de más", async () => {
+  const { transcriptToPlainText } = await import("./text.ts");
+  const txt = "  Hoy vemos   el modelo entidad-relación.\r\n\r\n\tUna clave foránea referencia otra tabla.  \n";
+  assert.equal(
+    transcriptToPlainText(txt),
+    "Hoy vemos el modelo entidad-relación.\nUna clave foránea referencia otra tabla.",
+  );
+});
