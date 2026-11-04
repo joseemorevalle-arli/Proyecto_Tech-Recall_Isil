@@ -30,3 +30,15 @@ export function vttToPlainText(vtt: string): string {
 
   return lines.join("\n");
 }
+
+// HU17: la transcripción puede venir de Zoom (VTT) o subirla el estudiante (VTT o TXT).
+// Si el texto tiene líneas de tiempos se trata como VTT; si no, es texto plano y solo se limpian los espacios.
+export function transcriptToPlainText(transcript: string): string {
+  if (transcript.split(/\r?\n/).some((row) => TIMING_LINE.test(row))) return vttToPlainText(transcript);
+
+  return transcript
+    .split(/\r?\n/)
+    .map((row) => row.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .join("\n");
+}

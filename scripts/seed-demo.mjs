@@ -56,10 +56,11 @@ for (const email of accounts) {
   let user;
   try {
     user = await auth.getUserByEmail(email);
-    await auth.updateUser(user.uid, { password });
+    await auth.updateUser(user.uid, { password, emailVerified: true });
   } catch (error) {
     if (error?.code !== "auth/user-not-found") throw error;
-    user = await auth.createUser({ email, password });
+    // HU04: las cuentas de demostración ya vienen con el correo verificado
+    user = await auth.createUser({ email, password, emailVerified: true });
   }
 
   // Mismo documento que crea el registro (HU02)

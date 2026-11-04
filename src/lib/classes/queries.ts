@@ -3,6 +3,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import { z } from "zod";
 import { adminDb } from "@/lib/firebase/admin";
 import { quizSchema, type Quiz } from "@/lib/quiz/schema";
+import { summarySchema, type Summary } from "@/lib/summary/schema";
 
 // Forma de una clase guardada en users/{uid}/courses/{courseId}/classes/{classId}.
 // Al leer no se repite la validación del enlace: si la regla cambia, las clases antiguas se siguen mostrando.
@@ -21,10 +22,25 @@ const storedClassSchema = z.object({
     .instanceof(Timestamp)
     .transform((timestamp) => timestamp.toDate())
     .optional(),
+  // HU17: de dónde salió la transcripción. Las clases de antes de la HU17 no lo tienen (vinieron de Zoom).
+  transcriptSource: z.enum(["zoom", "manual"]).optional(),
+  // HU10: fecha en que se guardó el resumen. El resumen en sí se lee con getClassContent().
+  summaryGeneratedAt: z
+    .instanceof(Timestamp)
+    .transform((timestamp) => timestamp.toDate())
+    .optional(),
 });
 
 // Campos que se leen de cada clase (todos menos la transcripción y el cuestionario)
-const LISTED_FIELDS = ["name", "zoomUrl", "createdAt", "transcribedAt", "quizGeneratedAt"] as const;
+const LISTED_FIELDS = [
+  "name",
+  "zoomUrl",
+  "createdAt",
+  "transcribedAt",
+  "quizGeneratedAt",
+  "transcriptSource",
+  "summaryGeneratedAt",
+] as const;
 
 export type CourseClass = z.output<typeof storedClassSchema> & { id: string };
 
@@ -51,22 +67,31 @@ export async function getClass(
 ): Promise<CourseClass | null> {
   if (!CLASS_ID_PATTERN.test(classId)) return null;
 
-  const doc = await classesCollection(uid, courseId).doc(classId).get();
+  // fieldMask: no se descarga la transcripción (puede pesar cientos de KB); se lee con getClassContent() si hace falta
+  const [doc] = await adminDb().getAll(classesCollection(uid, courseId).doc(classId), {
+    fieldMask: [...LISTED_FIELDS],
+  });
   if (!doc.exists) return null;
-  // El texto de la transcripción queda fuera del objeto: lo usarán las HU de resumen y cuestionario
 
   const parsed = storedClassSchema.safeParse(doc.data());
   return parsed.success ? { id: doc.id, ...parsed.data } : null;
 }
 
-// HU09/HU11: el texto de la transcripción y el cuestionario guardado de una clase. Solo para el servidor:
-// la transcripción pesa cientos de KB y no se manda al navegador. Igual que getClass, antes hay que haber
+export type ClassContent = {
+  name: string;
+  transcript: string | null;
+  quiz: Quiz | null;
+  summary: Summary | null;
+};
+
+// HU09/HU10/HU11: el texto de la transcripción, el resumen y el cuestionario guardados de una clase. Solo para el
+// servidor: la transcripción pesa cientos de KB y no se manda al navegador. Igual que getClass, antes hay que haber
 // confirmado con getCourse(uid, courseId) que el curso es del estudiante.
-export async function getClassQuiz(
+export async function getClassContent(
   uid: string,
   courseId: string,
   classId: string,
-): Promise<{ name: string; transcript: string | null; quiz: Quiz | null } | null> {
+): Promise<ClassContent | null> {
   if (!CLASS_ID_PATTERN.test(classId)) return null;
 
   const doc = await classesCollection(uid, courseId).doc(classId).get();
@@ -75,10 +100,19 @@ export async function getClassQuiz(
   const data = doc.data() ?? {};
   const name = typeof data.name === "string" ? data.name : "";
   const transcript = typeof data.transcript === "string" && data.transcript !== "" ? data.transcript : null;
-  // Un cuestionario guardado con formato inválido se trata como si no existiera: se podrá generar de nuevo
+  // Un cuestionario o un resumen guardado con formato inválido se trata como si no existiera: se podrá generar de nuevo
   const parsedQuiz = quizSchema.safeParse(data.quiz);
-  return { name, transcript, quiz: parsedQuiz.success ? parsedQuiz.data : null };
+  const parsedSummary = summarySchema.safeParse(data.summary);
+  return {
+    name,
+    transcript,
+    quiz: parsedQuiz.success ? parsedQuiz.data : null,
+    summary: parsedSummary.success ? parsedSummary.data : null,
+  };
 }
+
+// HU11: lo mismo que getClassContent (se mantiene el nombre que ya usan el cuestionario y sus acciones)
+export const getClassQuiz = getClassContent;
 
 // Clases del curso, de la más reciente a la más antigua. Un documento con formato inválido se omite (y se registra).
 export async function listClasses(

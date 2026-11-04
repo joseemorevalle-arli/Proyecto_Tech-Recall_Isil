@@ -8,11 +8,13 @@ import { requireSession } from "@/lib/auth/session";
 import { classesCollection, getClass } from "@/lib/classes/queries";
 import { CLASS_MESSAGES, classSchema } from "@/lib/classes/schema";
 import { getCourse } from "@/lib/courses/queries";
+import { deleteAttempts } from "@/lib/quiz/attempt-queries";
 import {
   fetchTranscript,
   TRANSCRIPT_MESSAGES,
   transcriptionConfigFromEnv,
 } from "@/lib/transcription/client";
+import { MANUAL_TRANSCRIPT_MESSAGES, validateManualTranscript } from "@/lib/transcription/manual";
 import type { RegisterClassState } from "../nueva/actions";
 
 export type DeleteClassState = { formError?: string };
@@ -103,6 +105,7 @@ export async function processClassAction(
       .doc(own.found.id)
       .update({
         transcript: result.vtt,
+        transcriptSource: "zoom",
         transcribedAt: FieldValue.serverTimestamp(),
       });
   } catch (error) {
@@ -110,8 +113,60 @@ export async function processClassAction(
     return { status: "error", message: PROCESS_GENERIC_ERROR };
   }
 
-  // La lista del curso muestra el nuevo estado («transcripción lista»)
+  // La lista del curso y el detalle de la clase muestran el nuevo estado («transcripción lista»)
   revalidatePath(`/cursos/${courseId}`);
+  revalidatePath(`/cursos/${courseId}/clases/${classId}`);
+  return { status: "done" };
+}
+
+// HU17: resultado de subir la transcripción a mano
+export type UploadTranscriptState = { status?: "done" | "error"; message?: string };
+
+// HU17: el estudiante sube la transcripción (.vtt o .txt) cuando no se pudo obtener desde Zoom.
+// Se valida en el servidor aunque el formulario ya lo haya hecho; si no pasa, no se asocia nada a la clase.
+export async function uploadTranscriptAction(
+  _prevState: UploadTranscriptState,
+  formData: FormData,
+): Promise<UploadTranscriptState> {
+  const courseId = String(formData.get("courseId") ?? "");
+  const classId = String(formData.get("classId") ?? "");
+  const file = formData.get("transcript");
+
+  let own: Awaited<ReturnType<typeof ownClass>>;
+  try {
+    own = await ownClass(courseId, classId);
+  } catch (error) {
+    console.error("Error al buscar la clase:", error instanceof Error ? error.name : "desconocido");
+    return { status: "error", message: PROCESS_GENERIC_ERROR };
+  }
+  if ("error" in own) return { status: "error", message: own.error };
+
+  // Una clase que ya tiene transcripción no se reemplaza: su resumen y su cuestionario salieron de ella
+  if (own.found.transcribedAt) {
+    return { status: "error", message: "Esta clase ya tiene transcripción." };
+  }
+
+  if (!(file instanceof File) || file.name === "") {
+    return { status: "error", message: MANUAL_TRANSCRIPT_MESSAGES.noFile };
+  }
+  const validation = validateManualTranscript(file.name, new Uint8Array(await file.arrayBuffer()));
+  if (!validation.ok) return { status: "error", message: validation.message };
+
+  try {
+    await classesCollection(own.uid, own.course.id)
+      .doc(own.found.id)
+      .update({
+        transcript: validation.transcript,
+        transcriptSource: "manual",
+        transcribedAt: FieldValue.serverTimestamp(),
+      });
+  } catch (error) {
+    console.error("Error al guardar la transcripción subida:", error instanceof Error ? error.name : "desconocido");
+    return { status: "error", message: PROCESS_GENERIC_ERROR };
+  }
+
+  revalidatePath(`/cursos/${courseId}`);
+  revalidatePath(`/cursos/${courseId}/clases/${classId}`);
   return { status: "done" };
 }
 
@@ -128,6 +183,8 @@ export async function deleteClassAction(
     if ("error" in own) return { formError: own.error };
 
     await classesCollection(own.uid, own.course.id).doc(own.found.id).delete();
+    // HU14: los intentos de su cuestionario también se borran del historial
+    await deleteAttempts(own.uid, "classId", own.found.id);
   } catch (error) {
     console.error("Error al eliminar la clase:", error instanceof Error ? error.name : "desconocido");
     return { formError: "No pudimos eliminar la clase. Inténtalo de nuevo en unos minutos." };

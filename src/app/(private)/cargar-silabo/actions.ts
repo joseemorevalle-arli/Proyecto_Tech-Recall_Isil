@@ -3,6 +3,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { FieldValue } from "firebase-admin/firestore";
 import { requireSession } from "@/lib/auth/session";
+import { isEmailVerified, VERIFICATION_MESSAGES } from "@/lib/auth/verification";
 import { adminDb } from "@/lib/firebase/admin";
 import { extractPdfText, looksLikePdf } from "@/lib/syllabus/extract-text";
 import { generateCourse, type GeminiClient } from "@/lib/syllabus/generate-course";
@@ -77,6 +78,14 @@ export async function generarEstructuraCurso(formData: FormData): Promise<Result
 
   const validacion = await validarSilabo(formData);
   if (!validacion.ok) return { exito: false, mensaje: validacion.mensaje };
+
+  // HU04, escenario 2: sin el correo verificado no se genera el curso
+  try {
+    if (!(await isEmailVerified(uid))) return { exito: false, mensaje: VERIFICATION_MESSAGES.required };
+  } catch (error) {
+    console.error("Error al consultar la verificación del correo:", error instanceof Error ? error.name : "desconocido");
+    return { exito: false, mensaje: MSG.generateFailed };
+  }
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {

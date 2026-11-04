@@ -11,6 +11,7 @@ import {
   type RegisterInput,
 } from "@/lib/auth/schemas";
 import { createSession } from "@/lib/auth/session";
+import { sendVerificationLinkWithIdToken } from "@/lib/auth/verification";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import { signInWithPassword } from "@/lib/firebase/identity-toolkit";
 
@@ -80,6 +81,11 @@ export async function registerAction(
     if (signIn.ok) {
       await createSession(signIn.idToken);
       sessionStarted = true;
+
+      // HU04, escenario 1: Firebase envía el enlace de verificación. Si falla, la cuenta igual queda
+      // creada: el estudiante puede pedirlo con «Reenviar enlace».
+      const sent = await sendVerificationLinkWithIdToken(signIn.idToken).catch(() => ({ ok: false }) as const);
+      if (!sent.ok) console.error("No se pudo enviar el enlace de verificación tras el registro.");
     }
   } catch (error) {
     console.error("Error al iniciar la sesión tras el registro:", error);

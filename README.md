@@ -49,9 +49,10 @@ Están descritas en `.env.example`, con el origen de cada una.
 |---|---|
 | `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` | Cuenta de servicio del Admin SDK (servidor) |
 | `FIREBASE_API_KEY` | Clave web para el REST de inicio de sesión. Solo servidor, sin `NEXT_PUBLIC_` |
-| `GEMINI_API_KEY` | Clave de la API de Gemini, para generar el curso desde el sílabo (HU06) y el cuestionario de una clase (HU11). Solo servidor |
+| `GEMINI_API_KEY` | Clave de la API de Gemini, para generar el curso desde el sílabo (HU06), el resumen (HU10) y el cuestionario (HU11) de una clase. Solo servidor |
 | `TRANSCRIPTION_SERVICE_URL` | Dirección del microservicio de transcripción (`recall_isil_api`, en Render) para la HU09. Solo servidor |
 | `TRANSCRIPTION_API_KEY` | Clave secreta compartida con el microservicio (la misma que allá se llama `TRANSCRIPTION_API_KEY`; al menos 16 caracteres, mejor 32 bytes aleatorios). Solo servidor |
+| `APP_URL` | Opcional. Dirección pública de la app: después de verificar el correo (HU04), Firebase ofrece volver a `{APP_URL}/cursos`. El dominio tiene que estar en «Dominios autorizados» de Firebase Authentication |
 | `ALLOWED_EMAIL_DOMAINS` | Dominios de correo permitidos para registrarse, separados por comas |
 | `FIREBASE_AUTH_EMULATOR_HOST`, `FIRESTORE_EMULATOR_HOST` | Solo en local, para usar los emuladores (`npm run demo` las pone solo) |
 | `DEMO_ACCOUNTS`, `DEMO_PASSWORD` | Solo para la demostración local: correos institucionales y su contraseña genérica |
@@ -64,7 +65,7 @@ Están descritas en `.env.example`, con el origen de cada una.
 | `npm run build` | Compilación de producción |
 | `npm run start` | Sirve la compilación de producción |
 | `npm run lint` | ESLint |
-| `npm test` | Pruebas automáticas (por ahora, el validador de sílabos) |
+| `npm test` | Pruebas automáticas (`node --test` sobre `src/**/*.test.ts`) |
 | `npm run emulators` | Emuladores de Firebase Auth (9099) y Firestore (8080) |
 | `npm run demo` | Emuladores + cuentas de demostración + servidor de desarrollo, en un solo comando |
 | `npm run seed:demo` | Crea las cuentas de demostración (los emuladores deben estar encendidos) |
@@ -173,11 +174,63 @@ En la lista de clases, una clase con transcripción muestra «Generar cuestionar
 - Limitación: el filtro comprueba que la frase citada exista en la clase, no que sostenga la respuesta; no es una garantía de que las preguntas salgan **solo** de la transcripción. Ver `docs/pruebas/sprint-2-HU11.md`.
 - Casos de prueba y resultados: `docs/pruebas/sprint-2-HU11.md`.
 
-## Riesgos conocidos (Sprint 1)
+## Detalle de la clase y grabación original (HU13)
+
+En la lista de clases, el nombre de cada clase lleva a `/cursos/{courseId}/clases/{classId}`. Esa pantalla reúne todo lo de la clase: «Ver grabación», la transcripción (HU09 y HU17), el resumen (HU10) y el cuestionario (HU11).
+
+- «Ver grabación» es un enlace al `zoomUrl` guardado, con `target="_blank"` y `rel="noopener noreferrer"`: se abre en una pestaña nueva y la pestaña de Zoom no puede manipular la de Recall ISIL.
+
+## Carga manual de la transcripción (HU17)
+
+Si «Obtener transcripción» falla o la grabación no tiene subtítulos, la clase muestra «Subir la transcripción manualmente», que lleva a la sección de transcripción del detalle. Ahí se sube un archivo `.vtt` (los subtítulos que se descargan de Zoom) o `.txt`.
+
+- `validateManualTranscript` (`src/lib/transcription/manual.ts`) es la única puerta y corre en el servidor (`uploadTranscriptAction`): solo `.vtt` o `.txt`, no vacío, hasta 800 KB (el mismo límite de la HU09), texto UTF-8 (un PDF o un .docx renombrado se rechaza), un `.vtt` con encabezado `WEBVTT` y líneas de tiempo, y al menos 200 caracteres de texto. El formulario repite las comprobaciones rápidas en el navegador para avisar antes de subir.
+- Si el archivo no pasa, se muestra el error y no se toca la clase. Si pasa, se guarda en el mismo campo `transcript` que la HU09, con `transcriptSource: "manual"` (la HU09 ahora guarda `"zoom"`), y se habilitan el resumen y el cuestionario.
+- Una clase que ya tiene transcripción no la reemplaza: su resumen y su cuestionario salieron de esa transcripción.
+- `transcriptToPlainText` (`src/lib/transcription/text.ts`) entrega a la IA el texto de un VTT (sin tiempos ni nombres) o el de un TXT tal cual.
+
+## Resumen por temas (HU10)
+
+En el detalle de la clase, con transcripción, aparece «Generar resumen». El resumen se guarda en el documento de la clase y, al volver a abrirla, se muestra el guardado sin llamar otra vez a la IA (escenario 3):
+
+```ts
+{
+  // ...campos de la HU08, HU09 y HU11
+  summary: { topics: [{ title: "...", keyIdeas: ["...", "..."], evidence: "frase de la clase" }] }, // 1 a 10 temas
+  summaryGeneratedAt: Timestamp, // la pone el servidor
+}
+```
+
+- `generateSummary` (`src/lib/summary/generate-summary.ts`) sigue el mismo diseño que el cuestionario: salida JSON con esquema, como máximo 2 intentos de ~55 s y la transcripción delimitada para que no pueda colar instrucciones.
+- Escenario 2 («no agrega temas que no se dictaron»): cada tema trae la frase de la clase donde se dictó (`evidence`). `selectSupportedTopics` descarta los temas cuya frase no aparece en la transcripción; si se descarta más de la mitad, el intento cuenta como fallido. La frase se muestra debajo de cada tema para que el estudiante pueda comprobarlo.
+- Limitación: igual que en la HU11, el filtro comprueba que el **tema** se mencionó en la clase, no que cada idea clave sea fiel a lo dicho.
+
+## Historial de cuestionarios (HU14)
+
+Al terminar un cuestionario («Ver mi puntaje»), el intento se guarda en `users/{uid}/quizAttempts/{attemptId}`:
+
+```ts
+{ courseId, classId, className, score, total: 10, answers: [0, 2, ...], createdAt: Timestamp }
+```
+
+- `saveQuizAttemptAction` recibe solo las respuestas; el **puntaje lo calcula el servidor** con el cuestionario guardado (`scoreQuiz`), así no se puede enviar un puntaje inventado.
+- El navegador genera el id del intento: si se reintenta el guardado, no se duplica. «Resolver de nuevo» genera un id nuevo, así que cada resolución es un intento aparte y los anteriores no se borran (escenario 2).
+- «Mi historial» (`/historial`, en el encabezado) agrupa los intentos por curso, con la clase, la fecha y el puntaje (`groupAttemptsByCourse`, `src/lib/quiz/attempts.ts`). Sin intentos, explica cómo empezar.
+- Al eliminar un curso o una clase se borran también sus intentos.
+
+## Verificación del correo (HU04)
+
+- Al crear la cuenta, el servidor pide a Firebase Auth que envíe el enlace de verificación (`accounts:sendOobCode`, con el `idToken` del inicio de sesión). Firebase manda el correo con su propia plantilla; abrir el enlace marca la cuenta como verificada.
+- «Reenviar enlace» (aviso en las páginas privadas mientras el correo no esté verificado): la sesión es una cookie, no un `idToken`, así que el servidor crea un token personalizado para el uid de la sesión (`createCustomToken`), lo cambia por un `idToken` y pide el envío (`src/lib/auth/verification.ts`).
+- Generar un curso (HU06), un resumen (HU10) o un cuestionario (HU11) comprueba `isEmailVerified(uid)` en el servidor **antes** de llamar a la IA. Se consulta Firebase Auth y no la cookie, porque la cookie no se entera de que el estudiante abrió el enlace después de iniciar sesión.
+- En los emuladores no se envía ningún correo: el enlace se ve en el registro del emulador de Auth y en `http://127.0.0.1:9099/emulator/v1/projects/demo-recall-isil/oobCodes`. Las cuentas de demostración (`npm run seed:demo`) se crean ya verificadas.
+- Las cuentas creadas antes de la HU04 no están verificadas: verán el aviso y tendrán que pulsar «Reenviar enlace».
+
+## Riesgos conocidos
 
 - El mensaje «Este correo ya está registrado» (criterio de HU02) revela que un correo tiene cuenta.
 - El registro con el Admin SDK no tiene la protección contra abuso del registro de Firebase.
-- Sin verificación de correo (HU04, Sprint 3) se puede registrar un correo de ISIL ajeno.
+- Desde la HU04 (Sprint 3) se puede registrar un correo de ISIL ajeno, pero no se puede generar contenido sin abrir el enlace que llega a ese correo.
 
 ## Guía de estilos
 

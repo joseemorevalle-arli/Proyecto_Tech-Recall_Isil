@@ -1,26 +1,62 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowRight, CircleCheck, CircleX, RotateCcw, Trophy } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useRef, useState, useTransition } from "react";
+import Link from "next/link";
+import { AlertCircle, ArrowRight, CircleCheck, CircleX, History, Loader2, RotateCcw, RotateCw, Trophy } from "lucide-react";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { QUIZ_QUESTIONS, scoreQuiz, type Quiz } from "@/lib/quiz/schema";
+import { saveQuizAttemptAction } from "./actions";
 
 const LETTERS = ["A", "B", "C"];
 
+type SaveStatus = { state: "idle" | "saving" | "saved" } | { state: "error"; message: string };
+
+// Id del intento. Lo genera el navegador para que reintentar el guardado no cree un intento duplicado.
+function newAttemptId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
 // HU11, escenario 2: una pregunta por pantalla con «Pregunta n de 10» y, al terminar, el puntaje final.
-// No se guarda nada: el historial de intentos es la HU14.
-export function QuizRunner({ quiz }: { quiz: Quiz }) {
+// HU14: al terminar, el intento se guarda en «Mi historial»; resolverlo otra vez guarda un intento nuevo.
+export function QuizRunner({ quiz, courseId, classId }: { quiz: Quiz; courseId: string; classId: string }) {
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState<Array<number | null>>(() => quiz.questions.map(() => null));
   const [finished, setFinished] = useState(false);
+  const [save, setSave] = useState<SaveStatus>({ state: "idle" });
+  const [, startTransition] = useTransition();
+  const attemptId = useRef<string | null>(null);
+
+  function saveAttempt(finalAnswers: Array<number | null>) {
+    if (!attemptId.current) attemptId.current = newAttemptId();
+    const id = attemptId.current;
+    setSave({ state: "saving" });
+    startTransition(async () => {
+      try {
+        const result = await saveQuizAttemptAction({
+          courseId,
+          classId,
+          attemptId: id,
+          answers: finalAnswers.map((value) => value ?? -1),
+        });
+        setSave(result.ok ? { state: "saved" } : { state: "error", message: result.message });
+      } catch {
+        setSave({ state: "error", message: "No pudimos guardar este intento en tu historial. Inténtalo de nuevo." });
+      }
+    });
+  }
 
   if (finished) {
     return (
       <Results
         quiz={quiz}
         answers={answers}
+        save={save}
+        onRetrySave={() => saveAttempt(answers)}
         onRestart={() => {
+          attemptId.current = null;
+          setSave({ state: "idle" });
           setAnswers(quiz.questions.map(() => null));
           setCurrent(0);
           setFinished(false);
@@ -89,7 +125,13 @@ export function QuizRunner({ quiz }: { quiz: Quiz }) {
 
         <div className="flex justify-end">
           {isLast ? (
-            <Button disabled={selected === null} onClick={() => setFinished(true)}>
+            <Button
+              disabled={selected === null}
+              onClick={() => {
+                setFinished(true);
+                saveAttempt(answers);
+              }}
+            >
               <Trophy aria-hidden />
               Ver mi puntaje
             </Button>
@@ -108,10 +150,14 @@ export function QuizRunner({ quiz }: { quiz: Quiz }) {
 function Results({
   quiz,
   answers,
+  save,
+  onRetrySave,
   onRestart,
 }: {
   quiz: Quiz;
   answers: Array<number | null>;
+  save: SaveStatus;
+  onRetrySave: () => void;
   onRestart: () => void;
 }) {
   const score = scoreQuiz(quiz, answers);
@@ -127,10 +173,17 @@ function Results({
           <p className="font-heading text-4xl" role="status">
             {score} de {QUIZ_QUESTIONS}
           </p>
-          <Button variant="outline" onClick={onRestart}>
-            <RotateCcw aria-hidden />
-            Resolver de nuevo
-          </Button>
+          <SaveNotice save={save} onRetry={onRetrySave} />
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button variant="outline" onClick={onRestart} disabled={save.state === "saving"}>
+              <RotateCcw aria-hidden />
+              Resolver de nuevo
+            </Button>
+            <Link href="/historial" className={buttonVariants({ variant: "ghost" })}>
+              <History aria-hidden />
+              Mi historial
+            </Link>
+          </div>
         </CardContent>
       </Card>
 
@@ -166,4 +219,39 @@ function Results({
       </ol>
     </div>
   );
+}
+
+// HU14: estado del guardado del intento en el historial
+function SaveNotice({ save, onRetry }: { save: SaveStatus; onRetry: () => void }) {
+  if (save.state === "saving") {
+    return (
+      <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Loader2 className="size-4 animate-spin" aria-hidden />
+        Guardando el intento en tu historial…
+      </p>
+    );
+  }
+  if (save.state === "saved") {
+    return (
+      <p role="status" className="flex items-center gap-2 text-sm text-green-400">
+        <CircleCheck className="size-4" aria-hidden />
+        Intento guardado en tu historial
+      </p>
+    );
+  }
+  if (save.state === "error") {
+    return (
+      <div className="flex flex-col items-center gap-2">
+        <p role="alert" className="flex items-start gap-2 text-sm text-destructive">
+          <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
+          {save.message}
+        </p>
+        <Button variant="outline" size="sm" onClick={onRetry}>
+          <RotateCw aria-hidden />
+          Reintentar guardado
+        </Button>
+      </div>
+    );
+  }
+  return null;
 }

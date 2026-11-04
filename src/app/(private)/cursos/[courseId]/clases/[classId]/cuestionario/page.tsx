@@ -29,11 +29,11 @@ export default async function CuestionarioPage({ params }: CuestionarioPageProps
   return (
     <section className="mx-auto flex w-full max-w-2xl flex-col gap-6">
       <Link
-        href={`/cursos/${course.id}`}
+        href={`/cursos/${course.id}/clases/${classId}`}
         className={buttonVariants({ variant: "ghost", className: "self-start" })}
       >
         <ArrowLeft aria-hidden />
-        Volver al curso
+        Volver a la clase
       </Link>
 
       {found === null ? (
@@ -50,7 +50,7 @@ export default async function CuestionarioPage({ params }: CuestionarioPageProps
           </div>
 
           {found.quiz ? (
-            <QuizRunner quiz={found.quiz} />
+            <QuizRunner quiz={found.quiz} courseId={course.id} classId={classId} />
           ) : (
             <EmptyQuiz
               courseId={course.id}
